@@ -1,4 +1,4 @@
-module MultisigBot
+module github.com/0xSOLIDarnost/dao-bot
 
 go 1.18
 
