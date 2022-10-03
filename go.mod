@@ -3,7 +3,7 @@ module github.com/0xSOLIDarnost/dao-bot
 go 1.18
 
 require (
-	github.com/MoonSHRD/IKY-telegram-bot v0.0.5
+	github.com/MoonSHRD/IKY-telegram-bot v0.0.6
 	github.com/ethereum/go-ethereum v1.10.25
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/joho/godotenv v1.4.0
