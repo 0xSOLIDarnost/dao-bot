@@ -13,7 +13,9 @@ import (
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
-	//GroupWallet
+	// TODO: fix it
+	//GroupWallet "github.com/daseinsucks/MultisigLegacy/tree/master/artifacts"
+	//GroupWallet "github.com/0xSOLIDarnost/dao-bot/tree/refactor/modules/artifacts/MultisigWallet"
 
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 
@@ -174,32 +176,7 @@ func loadEnv() {
 	}
 }
 
-// subscribing for Applications events. We use watchers without fast-forwarding past events
-func SubscribeForApplications(session *passport.PassportSession, listenChannel chan<- *passport.PassportPassportApplied) (event.Subscription, error) {
-	subscription, err := session.Contract.WatchPassportApplied(&bind.WatchOpts{
-		Start:   nil, //last block
-		Context: nil, // nil = no timeout
-	}, listenChannel,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return subscription, err
-}
 
-// subscribing for Applications events. We use watchers without fast-forwarding past events
-func SubscribeForApplicationsIndexed(session *passport.PassportSession, listenChannel chan<- *passport.PassportPassportAppliedIndexed, applierTGID []int64) (event.Subscription, error) {
-	subscription, err := session.Contract.WatchPassportAppliedIndexed(&bind.WatchOpts{
-		Start:   nil, //last block
-		Context: nil, // nil = no timeout
-	}, listenChannel,
-	   applierTGID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return subscription, err
-}
 
 
 
