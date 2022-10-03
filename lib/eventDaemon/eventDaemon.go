@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"strconv"
 
 	"os"
 
@@ -13,6 +12,8 @@ import (
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
+
+	//GroupWallet
 
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 
@@ -83,11 +84,6 @@ func main() {
 	msgTemplates["case0"] = "Go to link and attach your tg_id to your metamask wallet"
 	msgTemplates["await"] = "Awaiting for verification"
 	msgTemplates["case1"] = "You have successfully authorized your wallet to your account"
-
-	bot, err = tgbotapi.NewBotAPI(string(tgApiKey))
-	if err != nil {
-		log.Panic(err)
-	}
 
 	// Connecting to blockchain network
 	//  client, err := ethclient.Dial(os.Getenv("GATEWAY"))	// for global env config
@@ -160,105 +156,11 @@ func main() {
 
 	log.Printf("session with union center initialized")
 
-	log.Printf("Authorized on account %s", bot.Self.UserName)
+//	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
 
-	updates := bot.GetUpdatesChan(u)
 
-	//whenever bot gets a new message, check for user id in the database happens, if it's a new user, the entry in the database is created.
-	for update := range updates {
 
-		if update.Message != nil {
-			if _, ok := userDatabase[update.Message.From.ID]; !ok {
-
-				userDatabase[update.Message.From.ID] = user{update.Message.Chat.ID, update.Message.Chat.UserName, 0}
-				msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["hello"])
-				msg.ReplyMarkup = mainKeyboard
-				bot.Send(msg)
-			} else {
-
-				switch userDatabase[update.Message.From.ID].dialog_status {
-
-				//first check for user status, (for a new user status 0 is set automatically), then user reply for the first bot message is logged to a database as name AND user status is updated
-				case 0:
-					if updateDb, ok := userDatabase[update.Message.From.ID]; ok {
-
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["case0"])
-						bot.Send(msg)
-
-						tgid := userDatabase[update.Message.From.ID].tgid
-						user_name := userDatabase[update.Message.From.ID].tg_username
-						fmt.Println(user_name)
-						tgid_string := fmt.Sprint(tgid)
-						tgid_array := make([]int64,1)
-						tgid_array[0] = tgid
-						link := baseURL + tg_id_query + tgid_string + tg_username_query + "@" + user_name
-						msg = tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, link)
-						bot.Send(msg)
-
-						//subscription, err := SubscribeForApplications(session, ch)   //  this is ordinary subscription to NORMAL event
-						subscription, err := SubscribeForApplicationsIndexed(session, ch_index,tgid_array)	// this is subscription to INDEXED event. This mean we can pass what exactly value of argument we want to see
-
-						if err != nil {
-							log.Fatal(err)
-						}
-					EventLoop:
-						for {
-							select {
-							case <-ctx.Done():
-								{
-									subscription.Unsubscribe()
-									break EventLoop
-								}
-							case eventResult := <-ch_index:
-								{
-									fmt.Println("User tg_id:", eventResult.ApplyerTg)
-									fmt.Println("User wallet address:", eventResult.WalletAddress)
-										applyer_tg_string := strconv.FormatInt(eventResult.ApplyerTg,10)
-										msg = tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, " your application have been recived "+applyer_tg_string)
-										bot.Send(msg)
-										ApprovePassport(auth, passportCenter, eventResult.WalletAddress) 
-										subscription.Unsubscribe()
-										break EventLoop
-								}
-							/*  Use next snippet to work with regular events (when args are NOT INDEXED)
-							*	In this approach we parsing results from event and awaiting for values to match
-							case eventResult := <-ch:
-								{
-									//fmt.Println("\n")
-									fmt.Println("User tg_id:", eventResult.ApplyerTg)
-									event_tgid := eventResult.ApplyerTg
-									fmt.Println("User wallet address:", eventResult.WalletAddress)
-									if event_tgid == tgid {
-										applyer_tg_string := strconv.FormatInt(eventResult.ApplyerTg,10)
-										msg = tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, " your application have been recived "+applyer_tg_string)
-										bot.Send(msg)
-										ApprovePassport(auth, passportCenter, eventResult.WalletAddress)
-										subscription.Unsubscribe()
-										break EventLoop
-									}
-								} */
-							}
-							
-						}
-						updateDb.dialog_status = 1
-						userDatabase[update.Message.From.ID] = updateDb
-					}
-
-				case 1:
-					if updateDb, ok := userDatabase[update.Message.From.ID]; ok {
-						//updateDb.dialog_status = 2
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["case1"])
-						bot.Send(msg)
-						userDatabase[update.Message.From.ID] = updateDb
-					}
-
-				}
-			}
-		}
-	}
 
 } // end of main func
 
@@ -299,55 +201,7 @@ func SubscribeForApplicationsIndexed(session *passport.PassportSession, listenCh
 	return subscription, err
 }
 
-func ApprovePassport(auth *bind.TransactOpts, pc *passport.Passport, user_address common.Address) {
 
-	tx_to_approve, err := pc.ApprovePassport(
-		&bind.TransactOpts{
-			From:      auth.From,
-			Nonce:     nil,
-			Signer:    auth.Signer,
-			Value:     big.NewInt(0),
-			GasPrice:  nil,
-			GasFeeCap: nil,
-			GasTipCap: nil,
-			GasLimit:  0,
-			Context:   context.Background(),
-		}, user_address,
-	)
-
-	if err != nil {
-		log.Println("cant send approval reques to contract: ")
-		log.Print(err)
-	}
-
-	fmt.Printf("transaction for APPROVAL passport sent! Please wait for tx %s to be confirmed. \n", tx_to_approve.Hash().Hex())
-
-}
-
-func DeclinePassport(auth *bind.TransactOpts, pc *passport.Passport, user_address common.Address) {
-
-	tx_to_approve, err := pc.DeclinePassport(
-		&bind.TransactOpts{
-			From:      auth.From,
-			Nonce:     nil,
-			Signer:    auth.Signer,
-			Value:     big.NewInt(0),
-			GasPrice:  nil,
-			GasFeeCap: nil,
-			GasTipCap: nil,
-			GasLimit:  0,
-			Context:   context.Background(),
-		}, user_address,
-	)
-
-	if err != nil {
-		log.Println("cant send DECLINING reques to contract: ")
-		log.Print(err)
-	}
-
-	fmt.Printf("transaction for DECLINING passport sent! Please wait for tx %s to be confirmed. \n", tx_to_approve.Hash().Hex())
-
-}
 
 func GetUnionsCounter(session *union.UnionSession) (*big.Int, error) {
 
@@ -360,4 +214,26 @@ func GetUnionsCounter(session *union.UnionSession) (*big.Int, error) {
 	}
 }
 
+func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
+	chatId, err := session.ChatIdArray(counter)
+	if err != nil {
+		return 0, err
+	} else {
+		return chatId, err
+	}
+}
+
+
+// subscribing for ApprovedJoin events. We use watchers without fast-forwarding past events
+func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<- *union.UnionApprovedJoin) (event.Subscription, error) {
+	subscription, err := session.Contract.WatchApprovedJoin(&bind.WatchOpts{
+		Start:   nil, //last block
+		Context: nil, // nil = no timeout
+	}, listenChannel,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return subscription, err
+}
 
