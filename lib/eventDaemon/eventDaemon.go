@@ -349,7 +349,7 @@ func DeclinePassport(auth *bind.TransactOpts, pc *passport.Passport, user_addres
 
 }
 
-func getUnionsCounter(session *union.UnionSession) (*big.Int, error) {
+func GetUnionsCounter(session *union.UnionSession) (*big.Int, error) {
 
 	// sessionUnion.Contract.
 	dao_counter,err :=session.GetDaoCount()
@@ -358,5 +358,6 @@ func getUnionsCounter(session *union.UnionSession) (*big.Int, error) {
 	} else {
 		return dao_counter,err
 	}
-
 }
+
+
