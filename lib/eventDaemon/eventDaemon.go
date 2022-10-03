@@ -11,7 +11,9 @@ import (
 
 	"github.com/joho/godotenv"
 
+	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
+
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -23,6 +25,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+
+
 var yesNoKeyboard = tgbotapi.NewReplyKeyboard(
 	tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("Yes"),
@@ -33,6 +37,7 @@ var mainKeyboard = tgbotapi.NewReplyKeyboard(
 	tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("Verify personal wallet")),
 )
+
 
 //to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
 var tgApiKey, err = os.ReadFile(".secret")
@@ -113,6 +118,12 @@ func main() {
 		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
 	}
 
+	// setting up union contract
+	UnionCenter, err := union.NewUnion(common.HexToAddress("0x2658da2258849ad6a2104704F4f085644aD45d0D"), client)
+	if err != nil {
+		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
+	}
+
 	// Wrap the Passport contract instance into a session
 	session := &passport.PassportSession{
 		Contract: passportCenter,
@@ -130,7 +141,24 @@ func main() {
 		},
 	}
 
-	log.Printf("session with passport center initialized")
+	//Wrap union session
+	sessionUnion := &union.UnionSession{
+		Contract: UnionCenter,
+		CallOpts: bind.CallOpts{
+			Pending: true,
+			From:    auth.From,
+			Context: context.Background(),
+		},
+		TransactOpts: bind.TransactOpts{
+			From:     auth.From,
+			Signer:   auth.Signer,
+			GasLimit: 0,   // 0 automatically estimates gas limit
+			GasPrice: nil, // nil automatically suggests gas price
+			Context:  context.Background(),
+		},
+	}
+
+	log.Printf("session with union center initialized")
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -318,5 +346,17 @@ func DeclinePassport(auth *bind.TransactOpts, pc *passport.Passport, user_addres
 	}
 
 	fmt.Printf("transaction for DECLINING passport sent! Please wait for tx %s to be confirmed. \n", tx_to_approve.Hash().Hex())
+
+}
+
+func getUnionsCounter(session *union.UnionSession) (*big.Int, error) {
+
+	// sessionUnion.Contract.
+	dao_counter,err :=session.GetDaoCount()
+	if err != nil {
+		return nil, err
+	} else {
+		return dao_counter,err
+	}
 
 }
