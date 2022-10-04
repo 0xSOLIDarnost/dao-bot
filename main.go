@@ -20,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/event"
+
 	"github.com/joho/godotenv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -63,6 +65,8 @@ var address_query = "&address="
 var type_query = "&votingtype="
 var contract_query = "&votingtokencontract="
 var name_query = "&daoname="
+
+var ch_index = make(chan *union.UnionApplicationForJoinIndexed)
 
 //localhost:3000/dao?user_id=1337&chat_id=1337&address=23746624386&votingtype=1&votingtokencontract=3278465ASDW23&daoname=lol
 
@@ -108,6 +112,27 @@ func main() {
 	union, err := union.NewUnionCaller(common.HexToAddress("0x9c6C6CBDA53E72A6e25C5F9AcE5b1Ef87Ac8635b"), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Union contract: %v", err)
+	}
+
+	UnionSession, err := union.NewUnion(common.HexToAddress("0x9c6C6CBDA53E72A6e25C5F9AcE5b1Ef87Ac8635b"), client)
+	if err != nil {
+		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
+	}
+
+	session := &union.Session{
+		Contract: UnionSession,
+		CallOpts: bind.CallOpts{
+			Pending: true,
+			From:    auth.From,
+			Context: context.Background(),
+		},
+		TransactOpts: bind.TransactOpts{
+			From:     auth.From,
+			Signer:   auth.Signer,
+			GasLimit: 0,   // 0 automatically estimates gas limit
+			GasPrice: nil, // nil automatically suggests gas price
+			Context:  context.Background(),
+		},
 	}
 
 	log.Printf("session with union initialized")
@@ -236,10 +261,40 @@ func main() {
 
 						msg2 := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, link)
 						bot.Send(msg2)
+
+						tgid_array := make([]int64, 1)
+						tgid_array[0] = chatIDint
+
+						subscription, err := SubscribeForApplicationsIndexed(session, ch_index, tgid_array) // this is subscription to INDEXED event. This mean we can pass what exactly value of argument we want to see
+
+						if err != nil {
+							log.Fatal(err)
+						}
+					EventLoop:
+						for {
+							select {
+							case <-ctx.Done():
+								{
+									subscription.Unsubscribe()
+									break EventLoop
+								}
+							case eventResult := <-ch_index:
+								{
+									fmt.Println("DAO tg_id:", eventResult.ChatId)
+									fmt.Println("DAO wallet address:", eventResult.MultyWalletAddress)
+									applyer_tg_string := strconv.FormatInt(eventResult.ChatId, 10)
+									msg = tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, " your application have been recived "+applyer_tg_string)
+									bot.Send(msg)
+									ApproveDAO(auth, UnionSession, eventResult.MultyWalletAddress)
+									subscription.Unsubscribe()
+									break EventLoop
+								}
+
+							}
+						}
 					}
 				}
 			}
-
 		} else if userDatabase[update.Message.From.ID].setup_status == 0 {
 
 			switch userDatabase[update.Message.From.ID].dialog_status {
@@ -317,4 +372,41 @@ func checkAdmin(chat *tgbotapi.Chat, user *tgbotapi.User) bool {
 	} else {
 		return false
 	}
+}
+
+func SubscribeForApplicationsIndexed(session *union.UnionSession, listenChannel chan<- *union.UnionApplicationForJoinIndexed, chat_id []int64) (event.Subscription, error) {
+	subscription, err := session.Contract.WatchApplicationForJoinIndexed(&bind.WatchOpts{
+		Start:   nil, //last block
+		Context: nil, // nil = no timeout
+	}, listenChannel,
+		chat_id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return subscription, err
+}
+
+func ApproveDAO(auth *bind.TransactOpts, pc *union.Union, dao_address common.Address) {
+
+	tx_to_approve, err := pc.ApproveJoin(
+		&bind.TransactOpts{
+			From:      auth.From,
+			Nonce:     nil,
+			Signer:    auth.Signer,
+			Value:     big.NewInt(0),
+			GasPrice:  nil,
+			GasFeeCap: nil,
+			GasTipCap: nil,
+			GasLimit:  0,
+			Context:   context.Background(),
+		}, dao_address,
+	)
+
+	if err != nil {
+		log.Println("cant send approval request to contract: ")
+		log.Print(err)
+	}
+
+	fmt.Printf("transaction for APPROVAL DAO sent! Please wait for tx %s to be confirmed. \n", tx_to_approve.Hash().Hex())
 }
