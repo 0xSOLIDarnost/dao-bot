@@ -1,4 +1,4 @@
-package event_demon
+package main
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
-	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
+	//passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	// TODO: fix it
 	//multisig "github.com/daseinsucks/MultisigLegacy/artifacts"
@@ -32,6 +32,10 @@ import (
 
 var GlobalClient *ethclient.Client
 var GlobalAuth *bind.TransactOpts
+
+var chat_ids []int64
+
+var chat_wallets map[int64]common.Address
 
 var myenv map[string]string
 
@@ -69,20 +73,22 @@ func main() {
 	balance, _ := client.BalanceAt(ctx, accountAddress, nil) //our balance
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
+	/*
 	// Setting up Passport Contract
 	passportCenter, err := passport.NewPassport(common.HexToAddress("0x2658da2258849ad6a2104704F4f085644aD45d0D"), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
 	}
+	*/
 
 	// setting up union contract
-	UnionCenter, err := union.NewUnion(common.HexToAddress("0x2658da2258849ad6a2104704F4f085644aD45d0D"), client)
+	UnionCenter, err := union.NewUnion(common.HexToAddress("0xC3DD310b621c12D750A5F8f6fD00039f557968dF"), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
 	}
 
 
-
+	/*
 	// Wrap the Passport contract instance into a session
 	session := &passport.PassportSession{
 		Contract: passportCenter,
@@ -99,6 +105,7 @@ func main() {
 			Context:  context.Background(),
 		},
 	}
+	*/
 
 	//Wrap union session
 	sessionUnion := &union.UnionSession{
@@ -119,9 +126,45 @@ func main() {
 
 	log.Printf("session with union center initialized")
 
+
+	// Get current counter (how much chat_id is registred and make them in array)
+	counter, err := GetUnionsCounter(sessionUnion)
+	if err != nil {
+		log.Printf(err.Error())
+	}
+
+	log.Println(counter)
+	
+	counter_int := counter.Int64()
+
+	i := int64(0)
+	for i = 0;  i <= counter_int; i++ {
+		
+		
+		// get chat_id
+		chat_ids[i], err = GetChatID(sessionUnion,big.NewInt(i))
+		if err != nil {
+			log.Printf(err.Error())
+		}
+		fmt.Println("found new chat id: ",chat_ids[i])
+	}
+
+	
+	for _,id := range chat_ids {
+		chat_wallets[id], err = GetAddressDao(sessionUnion,id)
+		if err != nil {
+			log.Printf(err.Error())
+		}
+		fmt.Printf("for chat_id: %d  ",id)
+		fmt.Println("dao wallet address is: ", chat_wallets[id])
+	}
+	
+
+
 //	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	/** TODO:
+	*	0. Make initialize (main) function
 	*	1. subscribe for Union event "Approved"
 	*	2. each time someone got approve -- InitiateMultisigSession(ctx.Background, Multisig_address)
 	*	3. each time we get some "Submit" event from Multisig we need to forward it to main module with tethered chat_id
@@ -133,10 +176,10 @@ func main() {
 
 } // end of main func
 
-func InitiateMultisigSession(ctx context.Context,group_wallet_address string)  {
+func InitiateMultisigSession(ctx context.Context,dao_wallet_address string)  {
 
 //	ctx := context.Background()
-	MultisigInstance,err := multisig.NewMultisigwallet(common.HexToAddress(group_wallet_address),GlobalClient)
+	MultisigInstance,err := multisig.NewMultisigwallet(common.HexToAddress(dao_wallet_address),GlobalClient)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
@@ -208,6 +251,15 @@ func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
 		return 0, err
 	} else {
 		return chatId, err
+	}
+}
+
+func GetAddressDao(session *union.UnionSession, chat_id int64) (common.Address, error) {
+	dao_address,err := session.GetDaoAddressbyChatId(chat_id)
+	if err != nil {
+		return common.BigToAddress(nil), err
+	} else {
+		return dao_address, err
 	}
 }
 
