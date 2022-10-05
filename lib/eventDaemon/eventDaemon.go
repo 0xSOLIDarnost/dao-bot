@@ -114,6 +114,7 @@ func main() {
 	i := int64(0)
 	for i = 0;  i < counter_int; i++ {
 
+		// Get chatID
 		chat_id, err := GetChatID(sessionUnion,big.NewInt(i))
 		if err != nil {
 			log.Printf(err.Error())
@@ -125,6 +126,7 @@ func main() {
 
 	
 	for _,id := range chat_ids {
+		// get wallet addresses
 		chat_wallets[id], err = GetAddressDao(sessionUnion,id)
 		if err != nil {
 			log.Printf(err.Error())
@@ -133,6 +135,15 @@ func main() {
 		fmt.Println("dao wallet address is: ", chat_wallets[id])
 	}
 	
+	/*
+	for chatID,address := range chat_wallets {
+		InitiateMultisigSession(ctx,address)
+		fmt.Printf("for chat_id: %d  ",chatID)
+		fmt.Println("subscribed for multisig address: ", address)
+	}
+	*/
+
+
 
 
 //	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -150,10 +161,13 @@ func main() {
 
 } // end of main func
 
-func InitiateMultisigSession(ctx context.Context,dao_wallet_address string)  {
+
+
+// TODO: rework , cause of infinite cycle
+func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address)  {
 
 //	ctx := context.Background()
-	MultisigInstance,err := multisig.NewMultisigwallet(common.HexToAddress(dao_wallet_address),GlobalClient)
+	MultisigInstance,err := multisig.NewMultisigwallet(dao_wallet_address,GlobalClient)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
@@ -264,6 +278,7 @@ func SubscribeForSubmittedTransactions(session *multisig.MultisigwalletSession, 
 	if err != nil {
 		return nil, err
 	}
+	log.Println("subscribed to Multisig submission transactions")
 	return subscription,err
 }
 
