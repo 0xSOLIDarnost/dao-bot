@@ -6,7 +6,6 @@
 *.dylib
 *.secret
 *.env
-*.sum
 
 
 # Test binary, built with `go test -c`
