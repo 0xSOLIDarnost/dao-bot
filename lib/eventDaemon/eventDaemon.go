@@ -33,9 +33,9 @@ import (
 var GlobalClient *ethclient.Client
 var GlobalAuth *bind.TransactOpts
 
-var chat_ids []int64
+var chat_ids = make([]int64,0) 
 
-var chat_wallets map[int64]common.Address
+var chat_wallets = make(map[int64]common.Address)
 
 var myenv map[string]string
 
@@ -43,6 +43,7 @@ var myenv map[string]string
 const envLoc = ".env"
 
 func main() {
+
 
 	loadEnv()
 	ctx := context.Background()
@@ -132,20 +133,23 @@ func main() {
 	if err != nil {
 		log.Printf(err.Error())
 	}
-
 	log.Println(counter)
 	
 	counter_int := counter.Int64()
+	log.Println(counter_int)
 
 	i := int64(0)
 	for i = 0;  i <= counter_int; i++ {
 		
 		
 		// get chat_id
-		chat_ids[i], err = GetChatID(sessionUnion,big.NewInt(i))
+		//chat_id :=
+		chat_id, err := GetChatID(sessionUnion,big.NewInt(i))
 		if err != nil {
 			log.Printf(err.Error())
 		}
+		//chat_ids[i] = chat_id
+		chat_ids = append(chat_ids,chat_id)
 		fmt.Println("found new chat id: ",chat_ids[i])
 	}
 
@@ -250,6 +254,8 @@ func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
 	if err != nil {
 		return 0, err
 	} else {
+		log.Println("GetChatID: ")
+		log.Println(chatId)
 		return chatId, err
 	}
 }
