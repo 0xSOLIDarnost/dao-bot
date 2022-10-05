@@ -9,7 +9,6 @@ import (
 	"github.com/joho/godotenv"
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
-	//passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	// TODO: fix it
 	//multisig "github.com/daseinsucks/MultisigLegacy/artifacts"
@@ -74,13 +73,6 @@ func main() {
 	balance, _ := client.BalanceAt(ctx, accountAddress, nil) //our balance
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
-	/*
-	// Setting up Passport Contract
-	passportCenter, err := passport.NewPassport(common.HexToAddress("0x2658da2258849ad6a2104704F4f085644aD45d0D"), client)
-	if err != nil {
-		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
-	}
-	*/
 
 	// setting up union contract
 	UnionCenter, err := union.NewUnion(common.HexToAddress("0xC3DD310b621c12D750A5F8f6fD00039f557968dF"), client)
@@ -88,25 +80,6 @@ func main() {
 		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
 	}
 
-
-	/*
-	// Wrap the Passport contract instance into a session
-	session := &passport.PassportSession{
-		Contract: passportCenter,
-		CallOpts: bind.CallOpts{
-			Pending: true,
-			From:    auth.From,
-			Context: context.Background(),
-		},
-		TransactOpts: bind.TransactOpts{
-			From:     auth.From,
-			Signer:   auth.Signer,
-			GasLimit: 0,   // 0 automatically estimates gas limit
-			GasPrice: nil, // nil automatically suggests gas price
-			Context:  context.Background(),
-		},
-	}
-	*/
 
 	//Wrap union session
 	sessionUnion := &union.UnionSession{
@@ -139,11 +112,8 @@ func main() {
 	log.Println(counter_int)
 
 	i := int64(0)
-	for i = 0;  i <= counter_int; i++ {
-		
-		
-		// get chat_id
-		//chat_id :=
+	for i = 0;  i < counter_int; i++ {
+
 		chat_id, err := GetChatID(sessionUnion,big.NewInt(i))
 		if err != nil {
 			log.Printf(err.Error())
@@ -254,8 +224,8 @@ func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
 	if err != nil {
 		return 0, err
 	} else {
-		log.Println("GetChatID: ")
-		log.Println(chatId)
+		//log.Println("GetChatID: ")
+		//log.Println(chatId)
 		return chatId, err
 	}
 }
