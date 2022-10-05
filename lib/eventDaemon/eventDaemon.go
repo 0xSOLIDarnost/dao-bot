@@ -12,8 +12,9 @@ import (
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	// TODO: fix it
-	//GroupWallet "github.com/daseinsucks/MultisigLegacy/artifacts"
-	multisig "github.com/0xSOLIDarnost/dao-bot/artifacts/MultisigWallet"
+	//multisig "github.com/daseinsucks/MultisigLegacy/artifacts"
+	//multisig "github.com/0xSOLIDarnost/dao-bot/artifacts/multisig"
+	multisig "github.com/0xSOLIDarnost/MultisigLegacy/artifacts/multisig"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -135,13 +136,13 @@ func main() {
 func InitiateMultisigSession(ctx context.Context,group_wallet_address string)  {
 
 //	ctx := context.Background()
-	MultisigInstance,err := multisig.NewMypackage(common.HexToAddress(group_wallet_address),GlobalClient)
+	MultisigInstance,err := multisig.NewMultisigwallet(common.HexToAddress(group_wallet_address),GlobalClient)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
 
 	//Wrap a session
-	sessionMultisig := &multisig.MypackageSession{
+	sessionMultisig := &multisig.MultisigwalletSession{
 		Contract: MultisigInstance,
 		CallOpts: bind.CallOpts{
 			Pending: true,
@@ -157,7 +158,7 @@ func InitiateMultisigSession(ctx context.Context,group_wallet_address string)  {
 		},
 	}
 
-	var ch = make(chan *multisig.MypackageSubmission)
+	var ch = make(chan *multisig.MultisigwalletSubmission)
 	subscription,err := SubscribeForSubmittedTransactions(sessionMultisig,ch)
 
 	// Infinite loop for specific Multisig submission
@@ -226,7 +227,7 @@ func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<
 
 
 // TODO: add Anonymouse event for each time of event in multisig (without indexed values)
-func SubscribeForSubmittedTransactions(session *multisig.MypackageSession, listenChannel chan<- *multisig.MypackageSubmission) (event.Subscription, error) {
+func SubscribeForSubmittedTransactions(session *multisig.MultisigwalletSession, listenChannel chan<- *multisig.MultisigwalletSubmission) (event.Subscription, error) {
 	subscription, err := session.Contract.WatchSubmission(&bind.WatchOpts{
 		Start: nil,
 		Context: nil,
