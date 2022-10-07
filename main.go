@@ -51,7 +51,7 @@ type user struct {
 	usertype      *tgbotapi.User
 	tgid          int64
 	chatid        int64
-	tg_username   string
+	tg_chatname   string
 	dialog_status int64
 	setup_status  int64
 	repo          string
@@ -81,7 +81,7 @@ func main() {
 	_ = godotenv.Load()
 	ctx := context.Background()
 	pk := os.Getenv("PK") // load private key from env
-	gateway := os.Getenv("GATEWAY_RINKEBY_WS")
+	gateway := os.Getenv("GATEWAY_GOERLI_WS")
 
 	bot, err = tgbotapi.NewBotAPI(string(tgApiKey))
 	if err != nil {
@@ -112,14 +112,14 @@ func main() {
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
 	// Setting up Union
-	UnionCaller, err := union.NewUnionCaller(common.HexToAddress("0x9c6C6CBDA53E72A6e25C5F9AcE5b1Ef87Ac8635b"), client)
+	UnionCaller, err := union.NewUnionCaller(common.HexToAddress("0x5c845F2B0B81b4Eb9C9B4ed33b9e2a9eCF3B66d9"), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Union contract: %v", err)
 	}
 
-	UnionSession, err := union.NewUnion(common.HexToAddress("0x9c6C6CBDA53E72A6e25C5F9AcE5b1Ef87Ac8635b"), client)
+	UnionSession, err := union.NewUnion(common.HexToAddress("0x5c845F2B0B81b4Eb9C9B4ed33b9e2a9eCF3B66d9"), client)
 	if err != nil {
-		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
+		log.Fatalf("Failed to instantiate a Union contract: %v", err)
 	}
 
 	session := &union.UnionSession{
@@ -140,9 +140,9 @@ func main() {
 
 	log.Printf("session with union initialized")
 
-	passport, err := passport.NewPassportCaller(common.HexToAddress("0x44df8833c2D7d58f2F84Ba994BA46aA8f552A78e"), client)
+	passport, err := passport.NewPassportCaller(common.HexToAddress("0x155C672bFdD482F2D67a7cd30e3acDc3e59D5092"), client)
 	if err != nil {
-		log.Fatalf("Failed to instantiate a Union contract: %v", err)
+		log.Fatalf("Failed to instantiate a Passport contract: %v", err)
 	}
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -157,7 +157,7 @@ func main() {
 
 		if update.Message != nil {
 			if _, ok := userDatabase[update.Message.Chat.ID]; !ok {
-				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.UserName, 0, 0, "0", "0", 0, "0"}
+				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", 0, "0"}
 
 				isRegistered := checkDao(auth, UnionCaller, update.Message.Chat.ID)
 				if isRegistered {
@@ -166,7 +166,7 @@ func main() {
 						userDatabase[update.Message.Chat.ID] = updateDb
 					}
 				} else {
-					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Your Union is not registered yet! \nLet's register it! \n First, send me the link to your repo.")
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Your Union is not registered yet!\nLet's register it!.\nFirst, send me the link to your repo.")
 					bot.Send(msg)
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 						updateDb.dialog_status = 0
@@ -191,7 +191,7 @@ func main() {
 							bot.Send(msg)
 							delete(userDatabase, update.Message.Chat.ID)
 						}
-						isUserRegistered := checkUser(auth, passport, update.Message.Chat.ID)
+						isUserRegistered := checkUser(auth, passport, userDatabase[update.Message.Chat.ID].tgid)
 						if !isUserRegistered {
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Sorry, but before attaching DAO you should apply for passport here:")
 							bot.Send(msg)
@@ -239,7 +239,7 @@ func main() {
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 							updateDb.votingtype = tokenType
 							updateDb.setup_status = 4
-							userDatabase[update.Message.From.ID] = updateDb
+							userDatabase[update.Message.Chat.ID] = updateDb
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, last question: what's the address of your voting token?")
 							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 							bot.Send(msg)
@@ -271,7 +271,7 @@ func main() {
 						votingType := fmt.Sprint(votingTypeint)
 
 						vtt := userDatabase[update.Message.Chat.ID].vtt
-						chatName := update.Message.Chat.UserName
+						chatName := userDatabase[update.Message.Chat.ID].tg_chatname
 
 						link := baseURL + user_id_query + userID + chat_query + chatID + address_query + address + type_query + votingType + contract_query + vtt + name_query + chatName
 
