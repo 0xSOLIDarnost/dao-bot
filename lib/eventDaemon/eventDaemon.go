@@ -1,4 +1,4 @@
-package event_demon
+package main
 
 import (
 	"context"
@@ -9,11 +9,11 @@ import (
 	"github.com/joho/godotenv"
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
-	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	// TODO: fix it
-	//GroupWallet "github.com/daseinsucks/MultisigLegacy/artifacts"
-	multisig "github.com/0xSOLIDarnost/dao-bot/artifacts/MultisigWallet"
+	//multisig "github.com/daseinsucks/MultisigLegacy/artifacts"
+	//multisig "github.com/0xSOLIDarnost/dao-bot/artifacts/multisig"
+	multisig "github.com/0xSOLIDarnost/MultisigLegacy/artifacts/multisig"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,12 +32,17 @@ import (
 var GlobalClient *ethclient.Client
 var GlobalAuth *bind.TransactOpts
 
+var chat_ids = make([]int64,0) 
+
+var chat_wallets = make(map[int64]common.Address)
+
 var myenv map[string]string
 
 // file with settings for enviroment
 const envLoc = ".env"
 
 func main() {
+
 
 	loadEnv()
 	ctx := context.Background()
@@ -68,36 +73,13 @@ func main() {
 	balance, _ := client.BalanceAt(ctx, accountAddress, nil) //our balance
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
-	// Setting up Passport Contract
-	passportCenter, err := passport.NewPassport(common.HexToAddress("0x2658da2258849ad6a2104704F4f085644aD45d0D"), client)
-	if err != nil {
-		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
-	}
 
 	// setting up union contract
-	UnionCenter, err := union.NewUnion(common.HexToAddress("0x2658da2258849ad6a2104704F4f085644aD45d0D"), client)
+	UnionCenter, err := union.NewUnion(common.HexToAddress("0xC3DD310b621c12D750A5F8f6fD00039f557968dF"), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
 	}
 
-
-
-	// Wrap the Passport contract instance into a session
-	session := &passport.PassportSession{
-		Contract: passportCenter,
-		CallOpts: bind.CallOpts{
-			Pending: true,
-			From:    auth.From,
-			Context: context.Background(),
-		},
-		TransactOpts: bind.TransactOpts{
-			From:     auth.From,
-			Signer:   auth.Signer,
-			GasLimit: 0,   // 0 automatically estimates gas limit
-			GasPrice: nil, // nil automatically suggests gas price
-			Context:  context.Background(),
-		},
-	}
 
 	//Wrap union session
 	sessionUnion := &union.UnionSession{
@@ -118,9 +100,56 @@ func main() {
 
 	log.Printf("session with union center initialized")
 
+
+	// Get current counter (how much chat_id is registred and make them in array)
+	counter, err := GetUnionsCounter(sessionUnion)
+	if err != nil {
+		log.Printf(err.Error())
+	}
+	log.Println(counter)
+	
+	counter_int := counter.Int64()
+	log.Println(counter_int)
+
+	i := int64(0)
+	for i = 0;  i < counter_int; i++ {
+
+		// Get chatID
+		chat_id, err := GetChatID(sessionUnion,big.NewInt(i))
+		if err != nil {
+			log.Printf(err.Error())
+		}
+		//chat_ids[i] = chat_id
+		chat_ids = append(chat_ids,chat_id)
+		fmt.Println("found new chat id: ",chat_ids[i])
+	}
+
+	
+	for _,id := range chat_ids {
+		// get wallet addresses
+		chat_wallets[id], err = GetAddressDao(sessionUnion,id)
+		if err != nil {
+			log.Printf(err.Error())
+		}
+		fmt.Printf("for chat_id: %d  ",id)
+		fmt.Println("dao wallet address is: ", chat_wallets[id])
+	}
+	
+	/*
+	for chatID,address := range chat_wallets {
+		InitiateMultisigSession(ctx,address)
+		fmt.Printf("for chat_id: %d  ",chatID)
+		fmt.Println("subscribed for multisig address: ", address)
+	}
+	*/
+
+
+
+
 //	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	/** TODO:
+	*	0. Make initialize (main) function
 	*	1. subscribe for Union event "Approved"
 	*	2. each time someone got approve -- InitiateMultisigSession(ctx.Background, Multisig_address)
 	*	3. each time we get some "Submit" event from Multisig we need to forward it to main module with tethered chat_id
@@ -132,16 +161,19 @@ func main() {
 
 } // end of main func
 
-func InitiateMultisigSession(ctx context.Context,group_wallet_address string)  {
+
+
+// TODO: rework , cause of infinite cycle
+func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address)  {
 
 //	ctx := context.Background()
-	MultisigInstance,err := multisig.NewMypackage(common.HexToAddress(group_wallet_address),GlobalClient)
+	MultisigInstance,err := multisig.NewMultisigwallet(dao_wallet_address,GlobalClient)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
 
 	//Wrap a session
-	sessionMultisig := &multisig.MypackageSession{
+	sessionMultisig := &multisig.MultisigwalletSession{
 		Contract: MultisigInstance,
 		CallOpts: bind.CallOpts{
 			Pending: true,
@@ -157,7 +189,7 @@ func InitiateMultisigSession(ctx context.Context,group_wallet_address string)  {
 		},
 	}
 
-	var ch = make(chan *multisig.MypackageSubmission)
+	var ch = make(chan *multisig.MultisigwalletSubmission)
 	subscription,err := SubscribeForSubmittedTransactions(sessionMultisig,ch)
 
 	// Infinite loop for specific Multisig submission
@@ -206,7 +238,18 @@ func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
 	if err != nil {
 		return 0, err
 	} else {
+		//log.Println("GetChatID: ")
+		//log.Println(chatId)
 		return chatId, err
+	}
+}
+
+func GetAddressDao(session *union.UnionSession, chat_id int64) (common.Address, error) {
+	dao_address,err := session.GetDaoAddressbyChatId(chat_id)
+	if err != nil {
+		return common.BigToAddress(nil), err
+	} else {
+		return dao_address, err
 	}
 }
 
@@ -226,7 +269,7 @@ func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<
 
 
 // TODO: add Anonymouse event for each time of event in multisig (without indexed values)
-func SubscribeForSubmittedTransactions(session *multisig.MypackageSession, listenChannel chan<- *multisig.MypackageSubmission) (event.Subscription, error) {
+func SubscribeForSubmittedTransactions(session *multisig.MultisigwalletSession, listenChannel chan<- *multisig.MultisigwalletSubmission) (event.Subscription, error) {
 	subscription, err := session.Contract.WatchSubmission(&bind.WatchOpts{
 		Start: nil,
 		Context: nil,
@@ -235,6 +278,7 @@ func SubscribeForSubmittedTransactions(session *multisig.MypackageSession, liste
 	if err != nil {
 		return nil, err
 	}
+	log.Println("subscribed to Multisig submission transactions")
 	return subscription,err
 }
 
