@@ -60,6 +60,8 @@ type user struct {
 	vtt           string
 }
 
+type event_bc = *union.UnionApplicationForJoinIndexed
+
 var baseURL = "http://localhost:3000/dao"
 
 var user_id_query = "?user_id="
