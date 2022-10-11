@@ -58,7 +58,7 @@ type user struct {
 
 type event_bc = *union.UnionApplicationForJoinIndexed
 
-var baseURL = os.Getenv("URL")
+var baseURL = "http://localhost:3000/dao"
 
 var user_id_query = "?user_id="
 var chat_query = "&chat_id="
@@ -307,10 +307,14 @@ func main() {
 									msg = tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, " your application have been recived "+applyer_tg_string)
 									bot.Send(msg)
 									ApproveDAO(auth, UnionSession, eventResult.MultyWalletAddress)
-									subscription.Unsubscribe()
-									break EventLoop
-								}
+									if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+										updateDb.setup_status = 0
+										userDatabase[update.Message.Chat.ID] = updateDb
+										subscription.Unsubscribe()
+										break EventLoop
+									}
 
+								}
 							}
 						}
 					}
