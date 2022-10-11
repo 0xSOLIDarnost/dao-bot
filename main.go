@@ -82,7 +82,8 @@ func main() {
 	gateway := os.Getenv("GATEWAY_GOERLI_WS")
 
 	accAddress := os.Getenv("ACCOUNT_ADDRESS")
-	contractAddress := os.Getenv("CONTRACT_ADDRESS")
+	contractAddress := os.Getenv("UNION_ADDRESS")
+	passportAddress := os.Getenv("PASSPORT_ADDRESS")
 
 	bot, err = tgbotapi.NewBotAPI(string(tgApiKey))
 	if err != nil {
@@ -144,7 +145,7 @@ func main() {
 
 	log.Printf("session with union initialized")
 
-	passport, err := passport.NewPassportCaller(common.HexToAddress("0x155C672bFdD482F2D67a7cd30e3acDc3e59D5092"), client)
+	passport, err := passport.NewPassportCaller(common.HexToAddress(passportAddress), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Passport contract: %v", err)
 	}

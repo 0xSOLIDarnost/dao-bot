@@ -1,0 +1,6 @@
+PK=yourprivatekey
+GATEWAY_GOERLI_WS=wss://goerli.infura.io/ws/v3/
+ACCOUNT_ADDRESS=0x
+UNION_ADDRESS=0x
+PASSPORT_ADDRESS=0x
+URL=http://localhost:3000/dao
