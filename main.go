@@ -36,10 +36,6 @@ var numericKeyboard = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButton("ERC721")),
 )
 
-var mainKeyboard = tgbotapi.NewReplyKeyboard(
-	tgbotapi.NewKeyboardButtonRow(
-		tgbotapi.NewKeyboardButton("Verify personal wallet")),
-)
 var nullAddress common.Address = common.HexToAddress("0x0000000000000000000000000000000000000000")
 
 //to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
@@ -62,7 +58,7 @@ type user struct {
 
 type event_bc = *union.UnionApplicationForJoinIndexed
 
-var baseURL = "http://localhost:3000/dao"
+var baseURL = os.Getenv("URL")
 
 var user_id_query = "?user_id="
 var chat_query = "&chat_id="
@@ -85,6 +81,9 @@ func main() {
 	pk := os.Getenv("PK") // load private key from env
 	gateway := os.Getenv("GATEWAY_GOERLI_WS")
 
+	accAddress := os.Getenv("ACCOUNT_ADDRESS")
+	contractAddress := os.Getenv("CONTRACT_ADDRESS")
+
 	bot, err = tgbotapi.NewBotAPI(string(tgApiKey))
 	if err != nil {
 		log.Panic(err)
@@ -105,21 +104,24 @@ func main() {
 	}
 
 	// Creating an auth transactor
-	auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(4))
+	auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
+	if err != nil {
+		log.Fatalf("could not connect to auth gateway: %v\n", err)
+	}
 	//auth2:= bind.NewKeyedTransactorWithChainID(privateKey,big.NewInt(4))
 	//NewKeyedTransactorWithChainID
 
-	accountAddress := common.HexToAddress("0xc905803BbC804fECDc36850281fEd6520A346AC5")
+	accountAddress := common.HexToAddress(accAddress)
 	balance, _ := client.BalanceAt(ctx, accountAddress, nil) //our balance
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
 	// Setting up Union
-	UnionCaller, err := union.NewUnionCaller(common.HexToAddress("0x5c845F2B0B81b4Eb9C9B4ed33b9e2a9eCF3B66d9"), client)
+	UnionCaller, err := union.NewUnionCaller(common.HexToAddress(contractAddress), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Union contract: %v", err)
 	}
 
-	UnionSession, err := union.NewUnion(common.HexToAddress("0x5c845F2B0B81b4Eb9C9B4ed33b9e2a9eCF3B66d9"), client)
+	UnionSession, err := union.NewUnion(common.HexToAddress(contractAddress), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Union contract: %v", err)
 	}
