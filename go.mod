@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/0xSOLIDarnost/MultisigLegacy v0.0.2
-	github.com/MoonSHRD/IKY-telegram-bot v0.0.8
+	github.com/MoonSHRD/IKY-telegram-bot v0.0.10
 	github.com/ethereum/go-ethereum v1.10.25
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/joho/godotenv v1.4.0
