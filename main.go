@@ -215,7 +215,7 @@ func main() {
 						userDatabase[update.Message.Chat.ID] = updateDb
 
 						daoaddress := userDatabase[update.Message.Chat.ID].dao
-						wallet, _ := multisig.NewMultisigwalletCaller(common.HexToAddress(daoaddress), client)
+						wallet, _ := multisig.NewMultiSigWalletCaller(common.HexToAddress(daoaddress), client)
 
 						botIsOwner := checkBotAsOwner(auth, wallet, accountAddress)
 
@@ -436,7 +436,7 @@ func ApproveDAO(auth *bind.TransactOpts, pc *union.Union, dao_address common.Add
 	fmt.Printf("transaction for APPROVAL DAO sent! Please wait for tx %s to be confirmed. \n", tx_to_approve.Hash().Hex())
 }
 
-func checkBotAsOwner(auth *bind.TransactOpts, pc *multisig.MultisigwalletCaller, botAddress common.Address) bool {
+func checkBotAsOwner(auth *bind.TransactOpts, pc *multisig.MultiSigWalletCaller, botAddress common.Address) bool {
 	isOwner, _ := pc.IsOwner(&bind.CallOpts{
 		From:    auth.From,
 		Context: context.Background(),
