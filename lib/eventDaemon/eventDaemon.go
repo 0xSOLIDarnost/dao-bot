@@ -50,7 +50,7 @@ func main() {
 
 	// Connecting to blockchain network
 	//  client, err := ethclient.Dial(os.Getenv("GATEWAY"))	// for global env config
-	client, err := ethclient.Dial(myenv["GATEWAY_RINKEBY_WS"]) // load from local .env file
+	client, err := ethclient.Dial(myenv["GATEWAY_GOERLI_WS"]) // load from local .env file
 	if err != nil {
 		log.Fatalf("could not connect to Ethereum gateway: %v\n", err)
 	}
@@ -75,7 +75,7 @@ func main() {
 
 
 	// setting up union contract
-	UnionCenter, err := union.NewUnion(common.HexToAddress("0xC3DD310b621c12D750A5F8f6fD00039f557968dF"), client)
+	UnionCenter, err := union.NewUnion(common.HexToAddress("0xcFbE5b2D3f1E44a6fE469614741c16440ab19486"), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
 	}
@@ -167,13 +167,13 @@ func main() {
 func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address)  {
 
 //	ctx := context.Background()
-	MultisigInstance,err := multisig.NewMultisigwallet(dao_wallet_address,GlobalClient)
+	MultisigInstance,err := multisig.NewMultiSigWallet(dao_wallet_address,GlobalClient)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
 
 	//Wrap a session
-	sessionMultisig := &multisig.MultisigwalletSession{
+	sessionMultisig := &multisig.MultiSigWalletSession{
 		Contract: MultisigInstance,
 		CallOpts: bind.CallOpts{
 			Pending: true,
@@ -189,7 +189,7 @@ func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Addre
 		},
 	}
 
-	var ch = make(chan *multisig.MultisigwalletSubmission)
+	var ch = make(chan *multisig.MultiSigWalletSubmission)
 	subscription,err := SubscribeForSubmittedTransactions(sessionMultisig,ch)
 
 	// Infinite loop for specific Multisig submission
@@ -269,7 +269,7 @@ func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<
 
 
 // TODO: add Anonymouse event for each time of event in multisig (without indexed values)
-func SubscribeForSubmittedTransactions(session *multisig.MultisigwalletSession, listenChannel chan<- *multisig.MultisigwalletSubmission) (event.Subscription, error) {
+func SubscribeForSubmittedTransactions(session *multisig.MultiSigWalletSession, listenChannel chan<- *multisig.MultiSigWalletSubmission) (event.Subscription, error) {
 	subscription, err := session.Contract.WatchSubmission(&bind.WatchOpts{
 		Start: nil,
 		Context: nil,
