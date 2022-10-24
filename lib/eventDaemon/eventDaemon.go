@@ -36,6 +36,8 @@ var chat_ids = make([]int64,0)
 
 var chat_wallets = make(map[int64]common.Address)
 
+
+
 var myenv map[string]string
 
 // file with settings for enviroment
@@ -75,9 +77,9 @@ func main() {
 
 
 	// setting up union contract
-	UnionCenter, err := union.NewUnion(common.HexToAddress("0xcFbE5b2D3f1E44a6fE469614741c16440ab19486"), client)
+	UnionCenter, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client)
 	if err != nil {
-		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
+		log.Fatalf("Failed to instantiate a Union contract: %v", err)
 	}
 
 
@@ -124,6 +126,10 @@ func main() {
 		fmt.Println("found new chat id: ",chat_ids[i])
 	}
 
+	// we also subscribe to any new registred dao
+	var new_daos_ch = make(chan *union.UnionApprovedJoin)
+	subscriptionNewDaos,err := SubscribeForApprovedUnions(sessionUnion,new_daos_ch)
+
 	
 	for _,id := range chat_ids {
 		// get wallet addresses
@@ -135,14 +141,36 @@ func main() {
 		fmt.Println("dao wallet address is: ", chat_wallets[id])
 	}
 	
-	/*
+	
+
+
+	
 	for chatID,address := range chat_wallets {
-		InitiateMultisigSession(ctx,address)
+		go InitiateMultisigSession(ctx,address)
 		fmt.Printf("for chat_id: %d  ",chatID)
 		fmt.Println("subscribed for multisig address: ", address)
 	}
-	*/
+	
 
+
+	EventLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			{
+				subscriptionNewDaos.Unsubscribe();
+			break EventLoop
+			}
+	case NewDao:= <-new_daos_ch:
+		{
+			fmt.Println("/n")
+			fmt.Println("found new chat id::", NewDao.ChatId)
+			fmt.Println("with associated wallet address:", NewDao.MultyWalletAddress)
+			go InitiateMultisigSession(ctx,NewDao.MultyWalletAddress)
+
+		}
+		}
+		}
 
 
 
@@ -163,7 +191,7 @@ func main() {
 
 
 
-// TODO: rework , cause of infinite cycle
+// Initiate event listener session (go routine) for SUBMIT Events
 func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address)  {
 
 //	ctx := context.Background()
@@ -204,6 +232,7 @@ func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Addre
 	case eventResult:= <-ch:
 		{
 			fmt.Println("/n")
+			//fmt.Println("Somebody want to submit new tx, his address:")
 			fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
 			fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
 
@@ -244,6 +273,7 @@ func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
 	}
 }
 
+
 func GetAddressDao(session *union.UnionSession, chat_id int64) (common.Address, error) {
 	dao_address,err := session.GetDaoAddressbyChatId(chat_id)
 	if err != nil {
@@ -254,7 +284,7 @@ func GetAddressDao(session *union.UnionSession, chat_id int64) (common.Address, 
 }
 
 
-// subscribing for ApprovedJoin events. We use watchers without fast-forwarding past events
+// subscribing for ApprovedJoin events. This event represent that a new dao has been registred. We use watchers without fast-forwarding past events
 func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<- *union.UnionApprovedJoin) (event.Subscription, error) {
 	subscription, err := session.Contract.WatchApprovedJoin(&bind.WatchOpts{
 		Start:   nil, //last block
@@ -267,6 +297,15 @@ func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<
 	return subscription, err
 }
 
+/*
+// go routine for forwarding new found 
+func GetNewDaos(session *union.UnionSession) {
+
+	var new_daos = make(chan *union.UnionApprovedJoin)
+	subscriptionNewDaos,err := SubscribeForApprovedUnions(session,new_daos)
+
+}
+*/
 
 // TODO: add Anonymouse event for each time of event in multisig (without indexed values)
 func SubscribeForSubmittedTransactions(session *multisig.MultiSigWalletSession, listenChannel chan<- *multisig.MultiSigWalletSubmission) (event.Subscription, error) {
