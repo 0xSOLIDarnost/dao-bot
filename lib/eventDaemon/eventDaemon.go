@@ -36,7 +36,10 @@ var chat_ids = make([]int64,0)
 
 var chat_wallets = make(map[int64]common.Address)
 
-
+type SubmissionMsg struct {
+	chat_id int64
+	SubmissionEvent *multisig.MultiSigWalletSubmission
+}
 
 var myenv map[string]string
 
@@ -141,12 +144,14 @@ func main() {
 		fmt.Println("dao wallet address is: ", chat_wallets[id])
 	}
 	
-	
+	//var submission_ch = make(chan *multisig.MultiSigWalletSubmission)
+	var submission_msg = make(chan *SubmissionMsg)
 
 
 	
 	for chatID,address := range chat_wallets {
-		go InitiateMultisigSession(ctx,address)
+		//go SubscribeForSubmittedTransactions()
+		go InitiateMultisigSession(ctx,address,submission_msg,chatID)
 		fmt.Printf("for chat_id: %d  ",chatID)
 		fmt.Println("subscribed for multisig address: ", address)
 	}
@@ -166,8 +171,16 @@ func main() {
 			fmt.Println("/n")
 			fmt.Println("found new chat id::", NewDao.ChatId)
 			fmt.Println("with associated wallet address:", NewDao.MultyWalletAddress)
-			go InitiateMultisigSession(ctx,NewDao.MultyWalletAddress)
+			go InitiateMultisigSession(ctx,NewDao.MultyWalletAddress,submission_msg,NewDao.ChatId.Int64())
 
+		}
+	case NewSubmission := <-submission_msg:
+		{
+			fmt.Println("new submission has found in MAIN thread, channels work!")
+			fmt.Println("/n")
+			fmt.Println("transaction id:",NewSubmission.SubmissionEvent.TransactionId)
+			fmt.Println("chat id to sent msg:",NewSubmission.chat_id)
+			
 		}
 		}
 		}
@@ -192,7 +205,7 @@ func main() {
 
 
 // Initiate event listener session (go routine) for SUBMIT Events
-func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address)  {
+func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address, listenchan chan *SubmissionMsg, chat_id int64)  {
 
 //	ctx := context.Background()
 	MultisigInstance,err := multisig.NewMultiSigWallet(dao_wallet_address,GlobalClient)
@@ -235,7 +248,10 @@ func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Addre
 			//fmt.Println("Somebody want to submit new tx, his address:")
 			fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
 			fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
-
+			var msg *SubmissionMsg
+			msg.chat_id = chat_id
+			msg.SubmissionEvent = eventResult
+			listenchan <-msg
 		}
 		}
 		}
