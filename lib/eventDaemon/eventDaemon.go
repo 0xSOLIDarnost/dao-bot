@@ -1,4 +1,4 @@
-package main
+package eventDaemon
 
 import (
 	"context"
@@ -10,9 +10,6 @@ import (
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
 
-	// TODO: fix it
-	//multisig "github.com/daseinsucks/MultisigLegacy/artifacts"
-	//multisig "github.com/0xSOLIDarnost/dao-bot/artifacts/multisig"
 	multisig "github.com/0xSOLIDarnost/MultisigLegacy/artifacts/multisig"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -40,13 +37,14 @@ type SubmissionMsg struct {
 	chat_id int64
 	SubmissionEvent *multisig.MultiSigWalletSubmission
 }
+// var globalChan chan *SubmissionMsg
 
 var myenv map[string]string
 
 // file with settings for enviroment
 const envLoc = ".env"
 
-func main() {
+func Start(masterChannel chan *SubmissionMsg) {
 
 
 	loadEnv()
@@ -180,7 +178,8 @@ func main() {
 			fmt.Println("/n")
 			fmt.Println("transaction id:",NewSubmission.SubmissionEvent.TransactionId)
 			fmt.Println("chat id to sent msg:",NewSubmission.chat_id)
-			
+			fmt.Println("data:",NewSubmission.SubmissionEvent.Raw)
+			masterChannel<- NewSubmission
 		}
 		}
 		}
@@ -335,5 +334,16 @@ func SubscribeForSubmittedTransactions(session *multisig.MultiSigWalletSession, 
 	}
 	log.Println("subscribed to Multisig submission transactions")
 	return subscription,err
+}
+
+//func SubscribeTo
+
+func IsTokenTransfer(session *multisig.MultiSigWalletSession, data []byte) (bool,error) {
+	transfer, err := session.Contract.IsTransfer(&session.CallOpts,data)
+	if err != nil {
+		return false, err
+	} else {
+		return transfer,err
+	}
 }
 
