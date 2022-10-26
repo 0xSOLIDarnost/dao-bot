@@ -4,20 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 
 	"os"
 
 	"github.com/joho/godotenv"
+	//g_utils "github.com/SporkHubr/Spork-go/tree/master/lib/utils"		// use this to fetch repo by link
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -101,7 +99,7 @@ func main() {
 
 	loadEnv()
 	ctx := context.Background()
-	pk := myenv["PK"] // load private key from env
+	//pk := myenv["PK"] // load private key from env
 
 	msgTemplates["hello"] = "Hey, this bot is attaching personal wallets to telegram user & collective wallets to chat id"
 	msgTemplates["case0"] = "Go to link and attach your tg_id to your metamask wallet"
@@ -132,14 +130,15 @@ func main() {
 	}
 	defer client.Close()
 
+	/*
 	// setting up private key in proper format
 	privateKey, err := crypto.HexToECDSA(pk)
 	if err != nil {
 		log.Fatal(err)
-	}
+	}*/
 
 	// Creating an auth transactor
-	auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
+	//auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
 
 	// check calls
 	// check balance
@@ -151,29 +150,8 @@ func main() {
 	//passportCenter, err := passport.NewPassport(common.HexToAddress(myenv["PASSPORT_ADDRESS"]), client)
 	
 
-	unionContract, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client)
-	if err != nil {
-		log.Fatalln("can't estible connection with Union contract: %v",err)
-	}
-
-	sessionUnion := &union.UnionSession{
-		Contract: unionContract,
-		CallOpts: bind.CallOpts{
-			Pending: true,
-			From:    auth.From,
-			Context: context.Background(),
-		},
-		TransactOpts: bind.TransactOpts{
-			From:     auth.From,
-			Signer:   auth.Signer,
-			GasLimit: 0,   // 0 automatically estimates gas limit
-			GasPrice: nil, // nil automatically suggests gas price
-			Context:  context.Background(),
-		},
-	}
 
 
-	log.Printf("session with passport center & union initialized")
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -209,8 +187,8 @@ func main() {
 						msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["case0"])
 						bot.Send(msg)
 
-						subject := update.Message.Text
-						vote := ConstructVote(sessionUnion,update.Message.From.ID,subject)
+						//subject := update.Message.Text
+						//vote := ConstructVote(sessionUnion,update.Message.From.ID,subject)
 						// does we need to cast vote?
 						//base_chat_poll := vote.poll_config.BaseChat
 						
@@ -301,3 +279,4 @@ func StarteVoteSession(session *union.UnionSession, chat_id int64, subject strin
 	fmt.Println("open period: ", open_period)
 	//current_date :=    TODO: ask current day
 }
+
