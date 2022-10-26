@@ -130,7 +130,7 @@ func main() {
 
 	//var baseURL = "http://localhost:3000/"
 	//var baseURL = "https://ikytest-gw0gy01is-s0lidarnost.vercel.app/"
-	var baseURL = myenv["BASEURL"];
+	//	var baseURL = myenv["BASEURL"];
 
 
 
