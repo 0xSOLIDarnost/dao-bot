@@ -10,7 +10,9 @@ import (
 
 	"github.com/joho/godotenv"
 
+	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
+
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -54,6 +56,14 @@ type user struct {
 	tg_username   string
 	dialog_status int64
 }
+
+type VoteEntityConfig struct {
+	chat_id		int64
+	voting_token_address common.Address
+	voting_type	uint8
+	poll_config tgbotapi.SendPollConfig
+}
+
 
 type event_iterator = *passport.PassportPassportAppliedIterator // For filter  @TODO: consider removing
 
@@ -153,14 +163,16 @@ func main() {
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
 	// Setting up Passport Contract
-	passportCenter, err := passport.NewPassport(common.HexToAddress(myenv["PASSPORT_ADDRESS"]), client)
+	//passportCenter, err := passport.NewPassport(common.HexToAddress(myenv["PASSPORT_ADDRESS"]), client)
+	
+
+	unionContract, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client)
 	if err != nil {
-		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
+		log.Fatalln("can't estible connection with Union contract: %v",err)
 	}
 
-	// Wrap the Passport contract instance into a session
-	session := &passport.PassportSession{
-		Contract: passportCenter,
+	sessionUnion := &union.UnionSession{
+		Contract: unionContract,
 		CallOpts: bind.CallOpts{
 			Pending: true,
 			From:    auth.From,
@@ -175,7 +187,8 @@ func main() {
 		},
 	}
 
-	log.Printf("session with passport center initialized")
+
+	log.Printf("session with passport center & union initialized")
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -194,10 +207,10 @@ func main() {
 
 
 				userDatabase[update.Message.From.ID] = user{update.Message.Chat.ID, update.Message.Chat.UserName, 0}
-				//msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["hello"])
+				msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["hello"])
 
-			//	msg.ReplyMarkup = mainKeyboard
-			//	bot.Send(msg)
+		//		msg.ReplyMarkup = mainKeyboard
+				bot.Send(msg)
 			} else {
 
 				switch userDatabase[update.Message.From.ID].dialog_status {
@@ -211,15 +224,15 @@ func main() {
 						msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["case0"])
 						bot.Send(msg)
 
+						subject := update.Message.Text
+						vote := ConstructVote(sessionUnion,update.Message.From.ID,subject)
+						// does we need to cast vote?
+
 						tgid := userDatabase[update.Message.From.ID].tgid
 						user_name := userDatabase[update.Message.From.ID].tg_username
 						fmt.Println(user_name)
-						tgid_string := fmt.Sprint(tgid)
 						tgid_array := make([]int64, 1)
 						tgid_array[0] = tgid
-						link := baseURL + tg_id_query + tgid_string + tg_username_query + "@" + user_name
-						msg = tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, link)
-						bot.Send(msg)
 
 			
 						updateDb.dialog_status = 1
@@ -263,4 +276,41 @@ func WhoIsAddress(session *passport.PassportSession,address_to_check common.Addr
 	nickname := passport.UserName
 	return nickname,nil
 
+}
+
+// construct simple off-chain vote
+func ConstructPoll(subject string, chat_id int64) (tgbotapi.SendPollConfig) {
+	
+	var poll = tgbotapi.NewPoll(chat_id,subject,"yes","no")
+	return poll
+}
+
+// Get voting meta and construct simple off-chain poll (SendConfig)
+func ConstructVote(session *union.UnionSession,chat_id int64, subject string) (*VoteEntityConfig) {
+	dao_address, err := session.GetDaoAddressbyChatId(chat_id)
+	if err != nil {
+		log.Println("can't find dao registred with this chat id, possible not registred yet: ")
+		log.Println(err)
+	//	return "error", err
+	}
+	dao, err := session.Daos(dao_address)
+	v_token_address := dao.VotingToken
+	// erc20, erc20Snapshot, erc721
+	v_token_type := dao.VotingType
+	poll := ConstructPoll(subject,chat_id)
+	var v *VoteEntityConfig
+	v.chat_id = chat_id
+	v.voting_token_address = v_token_address
+	v.voting_type = v_token_type
+	v.poll_config = poll
+	return v
+}
+
+func StarteVoteSession(session *union.UnionSession, chat_id int64, subject string) {
+	vote_start_config := ConstructVote(session,chat_id,subject)
+	close_date := vote_start_config.poll_config.CloseDate
+	open_period := vote_start_config.poll_config.OpenPeriod
+	fmt.Println("close date:", close_date)
+	fmt.Println("open period: ", open_period)
+	//current_date :=    TODO: ask current day
 }
