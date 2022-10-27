@@ -1,5 +1,20 @@
 package voter
 
+/**
+*		TODO:
+*		1. ask what do u want (input transaction ID, possible get this from main thread)
+*		2. create poll with %subject% and vote yes/no, send it to chat id
+*		3. create go routine sleeping until dealine
+*		4. get results
+*		5. get arrays of tgid[] who voted yes and no
+*		6. for each tgid ask wallet from passport contract
+*		7. for each wallet ask if they have balanceOf(snapshot) of tokens, which associated with this chat id from Union contract
+*		8. only those, who have voting token is counted
+*		9. filter results, get final count yes or no
+*		10. return result in main thread through channel
+*
+ */
+
 import (
 	"context"
 	"fmt"
@@ -56,36 +71,10 @@ var userDatabase = make(map[int64]user) // consider to change in persistend data
 
 var msgTemplates = make(map[string]string)
 
-
-
-
 var myenv map[string]string
 
 // file with settings for enviroment
 const envLoc = ".env"
-
-
-/** 
-*		TODO:
-*		1. ask what do u want (input transaction ID, possible get this from main thread)
-*		2. create poll with %subject% and vote yes/no, send it to chat id
-*		3. create go routine sleeping until dealine
-*		4. get results
-*		5. get arrays of tgid[] who voted yes and no
-*		6. for each tgid ask wallet from passport contract
-*		7. for each wallet ask if they have balanceOf(snapshot) of tokens, which associated with this chat id from Union contract
-*		8. only those, who have voting token is counted
-*		9. filter results, get final count yes or no
-*		10. return result in main thread through channel
-*				
-*/
-
-
-
-
-
-
-
 
 
 // load enviroment variables from .env file
