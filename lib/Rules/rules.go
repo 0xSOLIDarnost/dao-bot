@@ -12,16 +12,13 @@ package main
  */
 
 import (
+	"context"
 	"log"
 
+	github_service "github.com/0xSOLIDarnost/dao-bot/lib/github"
+	github_utils "github.com/0xSOLIDarnost/dao-bot/lib/utils" // use this to fetch repo by link
 	"github.com/joho/godotenv"
-	//g_utils "github.com/SporkHubr/Spork-go/tree/master/lib/utils"		// use this to fetch repo by link
-
-	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
-
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 
@@ -36,13 +33,43 @@ var myenv map[string]string
 const envLoc = ".env"
 
 
+// attach rules github readme link to a chat
+func SetRules() {
+
+}
 
 
+// get content of rules by repo link. should return contains of README.md file 
+// TODO: test it!
+func GetRules(repo_url string, access_token string) (string,error){
+	ctx := context.Background()
+	owner,repo,err := github_utils.ParseGithubRepoURL(repo_url)		//repo also should called 'README'
+	if err != nil {
+		//return nil, err
+	}
 
+	//res := r.ContentsURL
+	service,err := github_service.NewGithubService(access_token)
+	if err != nil {
+		log.Println("can't create gh service")
+		//return nil, err
+	}
 
+	client := service.NextClient()
 
+	path := "/README.md"	// TODO: check it
 
+	file,_,_,err := client.HTTP.Repositories.GetContents(ctx,owner,repo,path,nil)
+	if err != nil {
+		return "", err
+	}
+	f_content,err := file.GetContent()
+	if err != nil {
+		return "", err
+	}
+	return f_content,err
 
+}
 
 
 
@@ -56,15 +83,4 @@ func loadEnv() {
 
 
 
-// allow bot to get tg nickname associated with this eth wallet
-func WhoIsAddress(session *passport.PassportSession,address_to_check common.Address) (string,error){
-	passport, err := session.GetPassportByAddress(address_to_check)
-	if err != nil {
-		log.Println("cant get passport associated with this address, possible it's not registred yet: ")
-		log.Print(err)
-		 return "error",err
-	}
-	nickname := passport.UserName
-	return nickname,nil
 
-}
