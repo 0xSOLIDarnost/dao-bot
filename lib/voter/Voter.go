@@ -1,10 +1,9 @@
-package main
+package voter
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 
 	"os"
 
@@ -17,7 +16,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -101,7 +99,7 @@ func main() {
 
 	loadEnv()
 	ctx := context.Background()
-	pk := myenv["PK"] // load private key from env
+	//pk := myenv["PK"] // load private key from env
 
 	msgTemplates["hello"] = "Hey, this bot is attaching personal wallets to telegram user & collective wallets to chat id"
 	msgTemplates["case0"] = "Go to link and attach your tg_id to your metamask wallet"
@@ -132,14 +130,16 @@ func main() {
 	}
 	defer client.Close()
 
+	/*
 	// setting up private key in proper format
 	privateKey, err := crypto.HexToECDSA(pk)
 	if err != nil {
 		log.Fatal(err)
 	}
+	*/
 
 	// Creating an auth transactor
-	auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
+	//auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))	// 5 is for GOERLI
 
 	// check calls
 	// check balance
@@ -150,12 +150,14 @@ func main() {
 	// Setting up Passport Contract
 	//passportCenter, err := passport.NewPassport(common.HexToAddress(myenv["PASSPORT_ADDRESS"]), client)
 	
-
+	/*
 	unionContract, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client)
 	if err != nil {
 		log.Fatalln("can't estible connection with Union contract: %v",err)
 	}
+	*/
 
+	/*
 	sessionUnion := &union.UnionSession{
 		Contract: unionContract,
 		CallOpts: bind.CallOpts{
@@ -171,6 +173,7 @@ func main() {
 			Context:  context.Background(),
 		},
 	}
+	*/
 
 
 	log.Printf("session with passport center & union initialized")
@@ -180,65 +183,7 @@ func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates := bot.GetUpdatesChan(u)
 
-	//whenever bot gets a new message, check for user id in the database happens, if it's a new user, the entry in the database is created.
-	for update := range updates {
-
-		if update.Message != nil  {
-			//if update.Message.Poll.
-			if _, ok := userDatabase[update.Message.From.ID]; !ok {
-
-
-
-				userDatabase[update.Message.From.ID] = user{update.Message.Chat.ID, update.Message.Chat.UserName, 0}
-				msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["hello"])
-
-		//		msg.ReplyMarkup = mainKeyboard
-				bot.Send(msg)
-			} else {
-
-				switch userDatabase[update.Message.From.ID].dialog_status {
-
-				//first check for user status, (for a new user status 0 is set automatically), then user reply for the first bot message is logged to a database as name AND user status is updated
-				case 0:
-					if updateDb, ok := userDatabase[update.Message.From.ID]; ok {
-
-
-
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["case0"])
-						bot.Send(msg)
-
-						subject := update.Message.Text
-						vote := ConstructVote(sessionUnion,update.Message.From.ID,subject)
-						// does we need to cast vote?
-						//base_chat_poll := vote.poll_config.BaseChat
-						
-						//msg2 := tgbotapi.NewPoll()
-						tgid := userDatabase[update.Message.From.ID].tgid
-						user_name := userDatabase[update.Message.From.ID].tg_username
-						fmt.Println(user_name)
-						tgid_array := make([]int64, 1)
-						tgid_array[0] = tgid
-
-			
-						updateDb.dialog_status = 1
-						userDatabase[update.Message.From.ID] = updateDb
-						
-					}
-					fallthrough // МЫ ЛЕД ПОД НОГАМИ МАЙОРА!
-				case 1:
-					if updateDb, ok := userDatabase[update.Message.From.ID]; ok {
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.From.ID].tgid, msgTemplates["case1"])
-						//msg.ReplyMarkup = optionKeyboard
-						bot.Send(msg)
-						updateDb.dialog_status = 2
-						userDatabase[update.Message.From.ID] = updateDb
-						
-					}
-			}   }
-		}
-	}
 
 } // end of main func
 
@@ -293,6 +238,7 @@ func ConstructVote(session *union.UnionSession,chat_id int64, subject string) (*
 	return v
 }
 
+// TODO
 func StarteVoteSession(session *union.UnionSession, chat_id int64, subject string) {
 	vote_start_config := ConstructVote(session,chat_id,subject)
 	close_date := vote_start_config.poll_config.CloseDate
@@ -300,4 +246,105 @@ func StarteVoteSession(session *union.UnionSession, chat_id int64, subject strin
 	fmt.Println("close date:", close_date)
 	fmt.Println("open period: ", open_period)
 	//current_date :=    TODO: ask current day
+}
+
+// Getter for user wallet
+func GetAddressByTgID(passportSession *passport.PassportSession, tg_id int64) (common.Address,error){
+	user_address,err := passportSession.GetPassportWalletByID(tg_id)
+	if err != nil {
+		return common.HexToAddress("0x0"),err
+	} else {
+		return user_address,err
+	}
+}
+
+
+// Create instanse of token contract with corresponding type and calculate balanceOf for []address
+func CalculatePower(client_bc *ethclient.Client,auth *bind.TransactOpts, token_address common.Address, token_type uint8)  {
+	
+	// Enum token_type, 0 = erc 20
+	if token_type == uint8(0) {
+
+	}
+}
+
+
+// This function calculete final vote power to specific []tg_ids related to chat_id group
+func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat_id int64,tg_ids []int64) {
+
+
+	// Setting up Passport Session
+	passportContract, err := passport.NewPassport(common.HexToAddress(myenv["PASSPORT_ADDRESS"]), client_bc)
+	if err != nil {
+		log.Fatalln("can't estible connection with Passport contract: %v",err)
+	}
+	sessionPassport := &passport.PassportSession{
+		Contract: passportContract,
+		CallOpts: bind.CallOpts{
+			Pending: true,
+			From:    auth.From,
+			Context: context.Background(),
+		},
+		TransactOpts: bind.TransactOpts{
+			From:     auth.From,
+			Signer:   auth.Signer,
+			GasLimit: 0,   // 0 automatically estimates gas limit
+			GasPrice: nil, // nil automatically suggests gas price
+			Context:  context.Background(),
+		},
+	}
+	
+	// Setting up Union Contract
+	unionContract, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client_bc)
+	if err != nil {
+		log.Fatalln("can't estible connection with Union contract: %v",err)
+	}
+	sessionUnion := &union.UnionSession{
+		Contract: unionContract,
+		CallOpts: bind.CallOpts{
+			Pending: true,
+			From:    auth.From,
+			Context: context.Background(),
+		},
+		TransactOpts: bind.TransactOpts{
+			From:     auth.From,
+			Signer:   auth.Signer,
+			GasLimit: 0,   // 0 automatically estimates gas limit
+			GasPrice: nil, // nil automatically suggests gas price
+			Context:  context.Background(),
+		},
+	}
+	
+	// create of user addresses and get them by tgid
+	var user_addresses = make([]common.Address,0)
+	for  _,tg_id := range tg_ids {
+		user_address,err := GetAddressByTgID(sessionPassport,tg_id)
+		if err != nil {
+			log.Println("user with %d tgid has not found in passport")
+			log.Println(err)
+			// TODO return err here
+		} else {
+			user_addresses = append(user_addresses,user_address )
+		}
+	}
+
+	// get vote_type
+	dao_address, err := sessionUnion.GetDaoAddressbyChatId(chat_id)
+	if err != nil {
+		log.Println("chat with this chat_id have not registred in Union", chat_id)
+		log.Println(err)
+		// TODO: return error here
+	}
+	dao,err := sessionUnion.Daos(dao_address)
+	if err != nil {
+		log.Println("can't find DAO struct with associated address %d")
+		log.Println("this shit can't be happened")
+		// TODO: return error here
+	}
+	voting_type := dao.VotingType
+	voting_token_address := dao.VotingToken
+
+
+
+
 }
