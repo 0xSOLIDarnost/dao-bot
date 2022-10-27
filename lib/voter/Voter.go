@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/big"
 
 	"os"
 
 	"github.com/joho/godotenv"
 
 	union "github.com/MoonSHRD/IKY-telegram-bot/artifacts"
+	token_erc20 "github.com/MoonSHRD/IKY-telegram-bot/artifacts/ERC20"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
@@ -48,16 +50,6 @@ type VoteEntityConfig struct {
 }
 
 
-type event_iterator = *passport.PassportPassportAppliedIterator // For filter  @TODO: consider removing
-
-// event we got from blockchain
-type event_bc = *passport.PassportPassportApplied
-
-// channel to get this event from blockchain
-var ch = make(chan *passport.PassportPassportApplied)
-var ch_index = make(chan *passport.PassportPassportAppliedIndexed)
-
-var ch_approved = make(chan *passport.PassportPassportApproved)
 
 //main database for dialogs, key (int64) is telegram user id
 var userDatabase = make(map[int64]user) // consider to change in persistend data storage?
@@ -65,8 +57,7 @@ var userDatabase = make(map[int64]user) // consider to change in persistend data
 var msgTemplates = make(map[string]string)
 
 
-var tg_id_query = "?user_tg_id="
-var tg_username_query = "&user_tg_name="
+
 
 var myenv map[string]string
 
@@ -95,97 +86,7 @@ const envLoc = ".env"
 
 
 
-func main() {
 
-	loadEnv()
-	ctx := context.Background()
-	//pk := myenv["PK"] // load private key from env
-
-	msgTemplates["hello"] = "Hey, this bot is attaching personal wallets to telegram user & collective wallets to chat id"
-	msgTemplates["case0"] = "Go to link and attach your tg_id to your metamask wallet"
-	msgTemplates["await"] = "Awaiting for verification"
-	msgTemplates["case1"] = "You have successfully authorized your wallet to your account. Now you can use additional functions"
-	msgTemplates["who_is"] = "Input wallet address to know it's associated telegram nickname"
-	msgTemplates["karma"] = "Karma system allow users to express trust/untrust to specific tg user or see who is trust/untrust to this user. Data is immutable and store in blockchain"
-	msgTemplates["trust_link"] = "Send telegram nickname of person who you are willing to trust/untrust"
-	msgTemplates["who_trust"] = "Send telegram nickname of person to see who trust/untrust it"
-
-
-	//var baseURL = "http://localhost:3000/"
-	//var baseURL = "https://ikytest-gw0gy01is-s0lidarnost.vercel.app/"
-	//	var baseURL = myenv["BASEURL"];
-
-
-
-	bot, err = tgbotapi.NewBotAPI(string(tgApiKey))
-	if err != nil {
-		log.Panic(err)
-	}
-
-	// Connecting to blockchain network
-	//  client, err := ethclient.Dial(os.Getenv("GATEWAY"))	// for global env config
-	client, err := ethclient.Dial(myenv["GATEWAY_GOERLI_WS"]) // load from local .env file
-	if err != nil {
-		log.Fatalf("could not connect to Ethereum gateway: %v\n", err)
-	}
-	defer client.Close()
-
-	/*
-	// setting up private key in proper format
-	privateKey, err := crypto.HexToECDSA(pk)
-	if err != nil {
-		log.Fatal(err)
-	}
-	*/
-
-	// Creating an auth transactor
-	//auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))	// 5 is for GOERLI
-
-	// check calls
-	// check balance
-	accountAddress := common.HexToAddress(myenv["ACCOUNT_ADDRESS"])
-	balance, _ := client.BalanceAt(ctx, accountAddress, nil) //our balance
-	fmt.Printf("Balance of the validator bot: %d\n", balance)
-
-	// Setting up Passport Contract
-	//passportCenter, err := passport.NewPassport(common.HexToAddress(myenv["PASSPORT_ADDRESS"]), client)
-	
-	/*
-	unionContract, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client)
-	if err != nil {
-		log.Fatalln("can't estible connection with Union contract: %v",err)
-	}
-	*/
-
-	/*
-	sessionUnion := &union.UnionSession{
-		Contract: unionContract,
-		CallOpts: bind.CallOpts{
-			Pending: true,
-			From:    auth.From,
-			Context: context.Background(),
-		},
-		TransactOpts: bind.TransactOpts{
-			From:     auth.From,
-			Signer:   auth.Signer,
-			GasLimit: 0,   // 0 automatically estimates gas limit
-			GasPrice: nil, // nil automatically suggests gas price
-			Context:  context.Background(),
-		},
-	}
-	*/
-
-
-	log.Printf("session with passport center & union initialized")
-
-	log.Printf("Authorized on account %s", bot.Self.UserName)
-
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-
-
-
-} // end of main func
 
 // load enviroment variables from .env file
 func loadEnv() {
@@ -218,12 +119,12 @@ func ConstructPoll(subject string, chat_id int64) (tgbotapi.SendPollConfig) {
 }
 
 // Get voting meta and construct simple off-chain poll (SendConfig)
-func ConstructVote(session *union.UnionSession,chat_id int64, subject string) (*VoteEntityConfig) {
+func ConstructVote(session *union.UnionSession,chat_id int64, subject string) (*VoteEntityConfig, error) {
 	dao_address, err := session.GetDaoAddressbyChatId(chat_id)
 	if err != nil {
 		log.Println("can't find dao registred with this chat id, possible not registred yet: ")
 		log.Println(err)
-	//	return "error", err
+		return nil, err
 	}
 	dao, err := session.Daos(dao_address)
 	v_token_address := dao.VotingToken
@@ -235,12 +136,17 @@ func ConstructVote(session *union.UnionSession,chat_id int64, subject string) (*
 	v.voting_token_address = v_token_address
 	v.voting_type = v_token_type
 	v.poll_config = poll
-	return v
+	return v,err
 }
 
 // TODO
 func StarteVoteSession(session *union.UnionSession, chat_id int64, subject string) {
-	vote_start_config := ConstructVote(session,chat_id,subject)
+	vote_start_config,err := ConstructVote(session,chat_id,subject)
+	if err != nil {
+		//return nil, err
+		log.Println("error in ConstructVote")
+		log.Println(err)
+	}
 	close_date := vote_start_config.poll_config.CloseDate
 	open_period := vote_start_config.poll_config.OpenPeriod
 	fmt.Println("close date:", close_date)
@@ -260,17 +166,52 @@ func GetAddressByTgID(passportSession *passport.PassportSession, tg_id int64) (c
 
 
 // Create instanse of token contract with corresponding type and calculate balanceOf for []address
-func CalculatePower(client_bc *ethclient.Client,auth *bind.TransactOpts, token_address common.Address, token_type uint8)  {
+func CalculatePower(client_bc *ethclient.Client,auth *bind.TransactOpts, token_address common.Address, token_type uint8, user_addresses []common.Address) (*big.Int,error) {
 	
+	var sum *big.Int 
 	// Enum token_type, 0 = erc 20
 	if token_type == uint8(0) {
+		tokenContract, err := token_erc20.NewTokenERC20(token_address,client_bc)
+		if err != nil {
+			//return nil, err  //TODO return err
+			log.Println("can't estiblish connection with VoteToken contract")
+			log.Println(err)
+		}
+		sessionToken := &token_erc20.TokenERC20Session{
+			Contract: tokenContract,
+			CallOpts: bind.CallOpts{
+					Pending: false,
+					From: auth.From,
+					Context: context.Background(),
+			},
+			TransactOpts: bind.TransactOpts{
+				From: auth.From,
+				Signer: auth.Signer,
+				GasLimit: 0,
+				GasPrice: nil,
+				Context: context.Background(),
+			},
+		}
 
-	}
+		for _,user_address := range user_addresses {
+			votePower,err := sessionToken.BalanceOf(user_address)
+			if err != nil {
+				log.Println("can't get balanceOf user, possible wrong address for token contract")
+				log.Println(err)
+				return nil, err
+			}
+			sum = sum.Add(sum,votePower) // not sure it should work this way
+		}
+		//return sum,err
+
+	}	// TODO: add calculating for other token type (ERC20Snapshot), NFT ..
+		// doing this require add this sample contracts in IKY and make new release
+	return sum,err
 }
 
 
-// This function calculete final vote power to specific []tg_ids related to chat_id group
-func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat_id int64,tg_ids []int64) {
+// This function calculete final vote power to specific []tg_ids related to chat_id group. Assuming tg_ids is already sorted yes/no array
+func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat_id int64,tg_ids []int64) (*big.Int,error){
 
 
 	// Setting up Passport Session
@@ -281,7 +222,7 @@ func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat
 	sessionPassport := &passport.PassportSession{
 		Contract: passportContract,
 		CallOpts: bind.CallOpts{
-			Pending: true,
+			Pending: false,
 			From:    auth.From,
 			Context: context.Background(),
 		},
@@ -302,7 +243,7 @@ func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat
 	sessionUnion := &union.UnionSession{
 		Contract: unionContract,
 		CallOpts: bind.CallOpts{
-			Pending: true,
+			Pending: false,
 			From:    auth.From,
 			Context: context.Background(),
 		},
@@ -322,7 +263,7 @@ func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat
 		if err != nil {
 			log.Println("user with %d tgid has not found in passport")
 			log.Println(err)
-			// TODO return err here
+			return nil,err
 		} else {
 			user_addresses = append(user_addresses,user_address )
 		}
@@ -333,18 +274,49 @@ func CalculateVotePower(client_bc *ethclient.Client,auth *bind.TransactOpts,chat
 	if err != nil {
 		log.Println("chat with this chat_id have not registred in Union", chat_id)
 		log.Println(err)
-		// TODO: return error here
+		return nil, err
 	}
 	dao,err := sessionUnion.Daos(dao_address)
 	if err != nil {
-		log.Println("can't find DAO struct with associated address %d")
+		log.Println("can't find DAO struct with associated address %v")
 		log.Println("this shit can't be happened")
-		// TODO: return error here
+		return nil, err
 	}
 	voting_type := dao.VotingType
 	voting_token_address := dao.VotingToken
 
+	summary_vote_power,err := CalculatePower(client_bc,auth,voting_token_address,voting_type,user_addresses)
+	if err != nil {
+		log.Println("error in counting tokens:")
+		log.Println(err)
+		return nil, err
+	}
+	return summary_vote_power,err
+}
 
+// Accepts []int64 tg_ids 'yes' and 'now' and generates final flag
+func CalculatePollResult(client_bc *ethclient.Client,auth *bind.TransactOpts,chat_id int64,yes_ids []int64, no_ids []int64) (bool,error) {
+	var accepted bool
+	yes_power,err := CalculateVotePower(client_bc,auth,chat_id,yes_ids)
+	if err != nil {
+		return false, err
+	}
+	no_power, err := CalculateVotePower(client_bc,auth,chat_id,no_ids)
+	if err != nil {
+		return false, err
+	}
 
+	//if yes_power > no_power true, otherwise false
+	switch yes_power.Cmp(no_power) {
+	case -1:
+		accepted = false
+	
+	case 0:
+		// parity
+		accepted = false
+	case 1:
+		accepted = true
+	}
 
+	return accepted,err
 }
