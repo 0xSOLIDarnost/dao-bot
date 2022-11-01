@@ -21,6 +21,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -378,11 +379,13 @@ func handlePanic() {
 func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *bind.TransactOpts, token_address common.Address, passportSession *passport.PassportSession, token_type uint8) (bool, bool) {
 	var accepted bool
 	var finished bool
+	var yesChosen = []int{0} //I'm not sure this'll work. It's supposed to be equal [0] as a "Yes" answer in a poll
 	if update.PollAnswer != nil {
 		if _, ok := poll[update.PollAnswer.PollID]; !ok {
 
 			accepts := false
-			if update.PollAnswer.OptionIDs == 0 { //"Yes" should be first option in poll
+			selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
+			if selectedYes { //"Yes" should be first option in poll
 				accepts = true
 			}
 
@@ -443,7 +446,8 @@ func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *
 				} else { //if user did not vote, we add him to an array with his opinion
 
 					accepts := false
-					if update.PollAnswer.OptionIDs == 0 {
+					selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
+					if selectedYes {
 						accepts = true //"Yes" should be first option in poll
 					}
 					if accepts {
