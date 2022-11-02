@@ -10,7 +10,6 @@ package lib
 import (
 	"context"
 	"errors"
-	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -46,48 +45,22 @@ type GithubClient struct {
 	GraphQL      *githubv4.Client
 }
 
-func NewGithubService(token string) (*GithubService, error) {
+func NewGithubService(ctx context.Context, token string) (*GithubService, error) {
 	if token != "" {
-		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-		tc := oauth2.NewClient(context.TODO(), ts)
-		ctx := context.TODO()
-		client := github.NewClient(tc)
-		graphClient := githubv4.NewClient(tc)
-
-		return &GithubService{
-			client: &GithubClient{
-				HTTP:         client,
-				httpThrottle: throttle.NewThrottle(ctx, nil),
-				GraphQL:      graphClient,
-			},
-		}, nil
+		return nil, errors.New("provided github token is empty")
 	}
 
-	ctx := context.TODO()
-	var clients_h  []*http.Client
-	var client_h = &http.Client{}
-	
-	clients_h = append(clients_h,client_h )
-	//clients, err := hardcodedClients()
-	clients := clients_h
-	
-	if len(clients) == 0 {
-		return nil, errors.New("there is zero hardcoded proxy clients, something not right")
-	}
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	tc := oauth2.NewClient(ctx, ts)
+	client := github.NewClient(tc)
+	graphClient := githubv4.NewClient(tc)
 
-	var githubClients []*GithubClient
-	for _, c := range clients {
-		client := github.NewClient(c)
-		graphClient := githubv4.NewClient(c)
-		githubClients = append(githubClients, &GithubClient{
+	return &GithubService{
+		client: &GithubClient{
 			HTTP:         client,
 			httpThrottle: throttle.NewThrottle(ctx, nil),
 			GraphQL:      graphClient,
-		})
-	}
-
-	return &GithubService{
-		clients: githubClients,
+		},
 	}, nil
 }
 
