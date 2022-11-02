@@ -1,4 +1,4 @@
-package main
+package rules
 
 /**
 *		TODO:
@@ -21,35 +21,27 @@ import (
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 )
 
-
-
-
-
-
-
 var myenv map[string]string
 
 // file with settings for enviroment
 const envLoc = ".env"
-
 
 // attach rules github readme link to a chat
 func SetRules() {
 
 }
 
-
-// get content of rules by repo link. should return contains of README.md file 
+// get content of rules by repo link. should return contains of README.md file
 // TODO: test it!
-func GetRules(repo_url string, access_token string) (string,error){
+func GetRules(repo_url string, access_token string) (string, error) {
 	ctx := context.Background()
-	owner,repo,err := github_utils.ParseGithubRepoURL(repo_url)		//repo also should called 'README'
+	owner, repo, err := github_utils.ParseGithubRepoURL(repo_url) //repo also should called 'README'
 	if err != nil {
 		//return nil, err
 	}
 
 	//res := r.ContentsURL
-	service,err := github_service.NewGithubService(access_token)
+	service, err := github_service.NewGithubService(access_token)
 	if err != nil {
 		log.Println("can't create gh service")
 		//return nil, err
@@ -57,21 +49,19 @@ func GetRules(repo_url string, access_token string) (string,error){
 
 	client := service.NextClient()
 
-	path := "/README.md"	// TODO: check it
+	path := "/README.md" // TODO: check it
 
-	file,_,_,err := client.HTTP.Repositories.GetContents(ctx,owner,repo,path,nil)
+	file, _, _, err := client.HTTP.Repositories.GetContents(ctx, owner, repo, path, nil)
 	if err != nil {
 		return "", err
 	}
-	f_content,err := file.GetContent()
+	f_content, err := file.GetContent()
 	if err != nil {
 		return "", err
 	}
-	return f_content,err
+	return f_content, err
 
 }
-
-
 
 // load enviroment variables from .env file
 func loadEnv() {
@@ -80,7 +70,3 @@ func loadEnv() {
 		log.Printf("could not load env from %s: %v", envLoc, err)
 	}
 }
-
-
-
-
