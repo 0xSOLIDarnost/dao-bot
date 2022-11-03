@@ -64,8 +64,8 @@ type VoteEntityConfig struct {
 }
 
 type ActiveVote struct {
-	yes    int64
-	no     int64
+	yes    *big.Int
+	no     *big.Int
 	voters []Voter
 }
 
@@ -389,19 +389,8 @@ func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *
 				accepts = true
 			}
 
-			var y, n int64 = 0, 0 //beginning of votepower calculation
+			var y, n *big.Int = big.NewInt(0), big.NewInt(0) //beginning of votepower calculation
 
-			votepower, err := CalculatePersonPower(client_bc, auth, token_address, passportSession, token_type, update.PollAnswer.User.ID)
-			if err != nil {
-				votepower = big.NewInt(0)
-			}
-
-			finalVotePower := votepower.Int64()
-			if accepts {
-				y = finalVotePower
-			} else {
-				n = finalVotePower
-			}
 			firstVoter := Voter{update.PollAnswer.User.ID, accepts}
 			poll[update.PollAnswer.PollID] = ActiveVote{y, n, []Voter{firstVoter}}
 
@@ -412,36 +401,26 @@ func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *
 				existingVoters := poll[update.PollAnswer.PollID].voters
 				alreadyVoted := false
 
-				var previouslyAccepted bool
-
-				for _, votersList := range existingVoters {
+				var voterNumber int
+				for n, votersList := range existingVoters {
 					if votersList.tgid == update.PollAnswer.User.ID {
 						alreadyVoted = true
-						previouslyAccepted = votersList.accepts
+						voterNumber = n
 					}
 				}
-
-				votepower, err := CalculatePersonPower(client_bc, auth, token_address, passportSession, token_type, update.PollAnswer.User.ID)
-				if err != nil {
-					votepower = big.NewInt(0)
-				}
-				finalVotePower := votepower.Int64()
 
 				updateVoteStatus := poll[update.PollAnswer.PollID]
 
-				if alreadyVoted { //if user already voted, we just change the uint value of yes/no
+				if alreadyVoted { //if user already voted, we just make another check whether he selected yes/no and store it
 
-					if previouslyAccepted {
-						updateVoteStatus.yes = updateVoteStatus.yes - finalVotePower
-						updateVoteStatus.no = updateVoteStatus.no + finalVotePower
-
-						poll[update.PollAnswer.PollID] = updateVoteStatus
-					} else {
-						updateVoteStatus.yes = updateVoteStatus.yes + finalVotePower
-						updateVoteStatus.no = updateVoteStatus.no - finalVotePower
-
-						poll[update.PollAnswer.PollID] = updateVoteStatus
+					accepts := false
+					selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
+					if selectedYes { //"Yes" should be first option in poll
+						accepts = true
 					}
+
+					updateVoteStatus.voters[voterNumber].accepts = accepts
+					poll[update.PollAnswer.PollID] = updateVoteStatus
 
 				} else { //if user did not vote, we add him to an array with his opinion
 
@@ -449,11 +428,6 @@ func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *
 					selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
 					if selectedYes {
 						accepts = true //"Yes" should be first option in poll
-					}
-					if accepts {
-						updateVoteStatus.yes = updateVoteStatus.yes + finalVotePower
-					} else {
-						updateVoteStatus.no = updateVoteStatus.no + finalVotePower
 					}
 
 					newVoter := Voter{update.PollAnswer.User.ID, accepts}
@@ -464,14 +438,42 @@ func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *
 				}
 
 			} else { //if poll is closed, then next incoming update triggers this block, which returns the result
-				finalYes := poll[update.PollAnswer.PollID].yes
-				finalNo := poll[update.PollAnswer.PollID].no
 
-				finished = true
+				var YesPower, NoPower *big.Int
 
-				if finalYes > finalNo {
+				existingVoters := poll[update.PollAnswer.PollID].voters
+
+				for _, votersList := range existingVoters {
+
+					votepower, err := CalculatePersonPower(client_bc, auth, token_address, passportSession, token_type, votersList.tgid)
+					if err != nil {
+						votepower = big.NewInt(0)
+					}
+
+					if votersList.accepts == true {
+						var c *big.Int //I'm not sure how the Add. func works, so I've decided to add a local variable
+						c.Add(YesPower, votepower)
+						YesPower = c
+					} else {
+						var c *big.Int
+						c.Add(NoPower, votepower)
+						NoPower = c
+					}
+				}
+
+				//final result calculation
+				switch YesPower.Cmp(NoPower) {
+
+				case -1:
+					accepted = false
+				case 0:
+					// parity
+					accepted = false
+				case 1:
 					accepted = true
 				}
+
+				finished = true
 
 			}
 
