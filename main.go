@@ -15,6 +15,7 @@ import (
 	multisig "github.com/0xSOLIDarnost/MultisigLegacy/artifacts/multisig"
 	//union "github.com/daseinsucks/MultisigBot/artifacts"
 
+	voter "github.com/0xSOLIDarnost/dao-botlib/voter/Voter.go"
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -338,7 +339,18 @@ func main() {
 					bot.Send(msg)
 				}
 
-				//all other logic may be implemented here
+			case 1:
+
+				switch update.Message.Text {
+
+				case "/startVote": 
+				if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+					updateDb.dialog_status = 2
+					userDatabase[update.Message.From.ID] = updateDb
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "")
+					bot.Send(msg)
+
+				}
 
 			}
 		}
