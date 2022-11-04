@@ -339,7 +339,7 @@ func main() {
 					bot.Send(msg)
 				}
 
-			case 1:
+			case 1: //main standby status, awaiting for commands
 
 				switch update.Message.Text {
 
@@ -347,12 +347,14 @@ func main() {
 				if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 					updateDb.dialog_status = 2
 					userDatabase[update.Message.From.ID] = updateDb
-					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "")
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, let's start a vote! Enter the topic.")
 					bot.Send(msg)
 
 				}
 
 			}
+
+			case 2:
 		}
 	}
 }
