@@ -56,11 +56,6 @@ type Voter struct {
 
 var poll = make(map[string]ActiveVote) // map pollId => ActiveVote
 
-//main database for dialogs, key (int64) is telegram user id
-var userDatabase = make(map[int64]user) // consider to change in persistend data storage?
-
-var msgTemplates = make(map[string]string)
-
 var myenv map[string]string
 
 // file with settings for enviroment
@@ -154,7 +149,7 @@ func StartPoll(chatId int64, durationInHours int64, topic string) tgbotapi.SendP
 
 //this function manages incoming votes in polls and returns 2 bool values
 //so we keep using it until finished variable == true
-func VoteInProgress(update *tgbotapi.Update, client_bc *ethclient.Client, auth *bind.TransactOpts, token_address common.Address, passportSession *passport.PassportSession, token_type uint8) (bool, bool) {
+func VoteInProgress(update tgbotapi.Update, client_bc *ethclient.Client, auth *bind.TransactOpts, token_address common.Address, passportSession *passport.PassportSession, token_type uint8) (bool, bool) {
 	var accepted bool
 	var finished bool
 	var yesChosen = []int{0} //I'm not sure this'll work. It's supposed to be equal [0] as a "Yes" answer in a poll

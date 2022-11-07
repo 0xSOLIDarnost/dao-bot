@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strconv"
 
 	//"math"
 	"os"
@@ -15,7 +16,7 @@ import (
 	multisig "github.com/0xSOLIDarnost/MultisigLegacy/artifacts/multisig"
 	//union "github.com/daseinsucks/MultisigBot/artifacts"
 
-	voter "github.com/0xSOLIDarnost/dao-botlib/voter/Voter.go"
+	voter "github.com/0xSOLIDarnost/dao-bot/lib/voter"
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -53,8 +54,10 @@ type user struct {
 	setup_status  int64
 	repo          string
 	dao           string
-	votingtype    int64
+	votingtype    uint8
 	vtt           string
+	pollTopic     string
+	pollDuration  int64
 }
 
 type event_bc = *union.UnionApplicationForJoinIndexed
@@ -146,10 +149,33 @@ func main() {
 
 	log.Printf("session with union initialized")
 
-	passport, err := passport.NewPassportCaller(common.HexToAddress(passportAddress), client)
+	passportCaller, err := passport.NewPassportCaller(common.HexToAddress(passportAddress), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Passport contract: %v", err)
 	}
+
+	passportCenter, err := passport.NewPassport(common.HexToAddress(passportAddress), client)
+	if err != nil {
+		log.Fatalf("Failed to instantiate a TGPassport contract: %v", err)
+	}
+
+	passportSession := &passport.PassportSession{
+		Contract: passportCenter,
+		CallOpts: bind.CallOpts{
+			Pending: true,
+			From:    auth.From,
+			Context: context.Background(),
+		},
+		TransactOpts: bind.TransactOpts{
+			From:     auth.From,
+			Signer:   auth.Signer,
+			GasLimit: 0,   // 0 automatically estimates gas limit
+			GasPrice: nil, // nil automatically suggests gas price
+			Context:  context.Background(),
+		},
+	}
+
+	log.Printf("session with passport initialized")
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -163,12 +189,13 @@ func main() {
 
 		if update.Message != nil {
 			if _, ok := userDatabase[update.Message.Chat.ID]; !ok {
-				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", 0, "0"}
+				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", 0, "0", "0", 0}
 
 				isRegistered := checkDao(auth, UnionCaller, update.Message.Chat.ID)
 				if isRegistered {
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 						updateDb.dialog_status = 1
+						updateDb.setup_status = 0
 						userDatabase[update.Message.Chat.ID] = updateDb
 					}
 				} else {
@@ -197,7 +224,7 @@ func main() {
 							bot.Send(msg)
 							delete(userDatabase, update.Message.Chat.ID)
 						}
-						isUserRegistered := checkUser(auth, passport, userDatabase[update.Message.Chat.ID].tgid)
+						isUserRegistered := checkUser(auth, passportCaller, userDatabase[update.Message.Chat.ID].tgid)
 						if !isUserRegistered {
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Sorry, but before attaching DAO you should apply for passport here:")
 							bot.Send(msg)
@@ -233,7 +260,7 @@ func main() {
 				case 3:
 					if update.Message.Text == "ERC20Snapshot" || update.Message.Text == "ERC20" || update.Message.Text == "ERC721" {
 
-						var tokenType int64
+						var tokenType uint8
 						if update.Message.Text == "ERC20" {
 							tokenType = 0
 						} else if update.Message.Text == "ERC20Snapshot" {
@@ -339,22 +366,65 @@ func main() {
 					bot.Send(msg)
 				}
 
-			case 1: //main standby status, awaiting for commands
+			case 1: //main standby status, awaiting for commands (they should be entered in this switch statement)
 
 				switch update.Message.Text {
 
-				case "/startVote": 
+				case "/startVote":
+					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+						updateDb.dialog_status = 2
+						userDatabase[update.Message.From.ID] = updateDb
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, let's start a vote! Enter the topic.")
+						bot.Send(msg)
+
+					}
+
+				}
+
+			case 2:
+
 				if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-					updateDb.dialog_status = 2
+					updateDb.pollTopic = update.Message.Text
+					updateDb.dialog_status = 3
 					userDatabase[update.Message.From.ID] = updateDb
-					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, let's start a vote! Enter the topic.")
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, for how long in hours you want to be active?")
 					bot.Send(msg)
 
 				}
 
-			}
+			case 3:
 
-			case 2:
+				if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+					duration, _ := strconv.ParseInt(update.Message.Text, 10, 64)
+
+					updateDb.pollDuration = duration
+					updateDb.dialog_status = 4
+					userDatabase[update.Message.From.ID] = updateDb
+
+					poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].chatid, userDatabase[update.Message.Chat.ID].pollDuration, userDatabase[update.Message.Chat.ID].pollTopic)
+					bot.Send(poll)
+
+				}
+
+			case 4:
+				tokenAddress := common.HexToAddress(userDatabase[update.Message.Chat.ID].vtt)
+				tokenType := userDatabase[update.Message.Chat.ID].votingtype
+				accepted, finished := voter.VoteInProgress(update, client, auth, tokenAddress, passportSession, tokenType)
+				if finished {
+					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+						updateDb.dialog_status = 1
+						text := "Was declined!"
+						if accepted {
+							text = "Was accepted!"
+						}
+						userDatabase[update.Message.From.ID] = updateDb
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, text)
+						bot.Send(msg)
+
+					}
+				}
+
+			}
 		}
 	}
 }
