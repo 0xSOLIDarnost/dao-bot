@@ -120,7 +120,7 @@ func CalculatePersonPower(client_bc *ethclient.Client, auth *bind.TransactOpts, 
 			return nil, err
 		}
 	}
-
+	fmt.Println(sum)
 	return sum, err
 }
 
@@ -138,11 +138,12 @@ func StartPoll(chatId int64, durationInHours int64, topic string) tgbotapi.SendP
 	pollToSend := tgbotapi.NewPoll(chatId, topic, "Yes", "No")
 
 	currentDate := time.Now().Unix()
-	hoursInSeconds := durationInHours * 3600
+	hoursInSeconds := durationInHours * 120
 	timeToClose := currentDate + hoursInSeconds
-
+	fmt.Println(hoursInSeconds)
 	timeToCloseInt := int(timeToClose)
 	pollToSend.CloseDate = timeToCloseInt
+	pollToSend.IsAnonymous = false
 
 	return pollToSend
 }
@@ -166,6 +167,7 @@ func VoteInProgress(update tgbotapi.Update, client_bc *ethclient.Client, auth *b
 
 			firstVoter := Voter{update.PollAnswer.User.ID, accepts}
 			poll[update.PollAnswer.PollID] = ActiveVote{y, n, []Voter{firstVoter}}
+			fmt.Println("Voting successful!")
 
 		} else {
 
@@ -208,6 +210,7 @@ func VoteInProgress(update tgbotapi.Update, client_bc *ethclient.Client, auth *b
 					updateArray := append(i, newVoter)
 					updateVoteStatus.voters = updateArray
 					poll[update.PollAnswer.PollID] = updateVoteStatus
+					fmt.Println("Voting successful!")
 				}
 
 			} else { //if poll is closed, then next incoming update triggers this block, which returns the result
@@ -253,6 +256,5 @@ func VoteInProgress(update tgbotapi.Update, client_bc *ethclient.Client, auth *b
 		}
 
 	}
-
 	return accepted, finished
 }
