@@ -150,7 +150,7 @@ func StartPoll(chatId int64, durationInHours int64, topic string) tgbotapi.SendP
 
 //this function manages incoming votes in polls and returns 2 bool values
 //so we keep using it until finished variable == true
-func VoteInProgress(duration int64, beginning int64, update tgbotapi.Update, client_bc *ethclient.Client, auth *bind.TransactOpts, token_address common.Address, passportSession *passport.PassportSession, token_type uint8, pollId string) (bool, bool) {
+func VoteInProgress(update tgbotapi.Update, client_bc *ethclient.Client, auth *bind.TransactOpts, token_address common.Address, passportSession *passport.PassportSession, token_type uint8) (bool, bool) {
 	var accepted bool
 	var finished bool
 	var yesChosen = []int{0} //I'm not sure this'll work. It's supposed to be equal [0] as a "Yes" answer in a poll
@@ -171,91 +171,91 @@ func VoteInProgress(duration int64, beginning int64, update tgbotapi.Update, cli
 
 		} else {
 
-			existingVoters := poll[update.PollAnswer.PollID].voters
-			alreadyVoted := false
+			if !update.Poll.IsClosed {
 
-			var voterNumber int
-			for n, votersList := range existingVoters {
-				if votersList.tgid == update.PollAnswer.User.ID {
-					alreadyVoted = true
-					voterNumber = n
-				}
-			}
+				existingVoters := poll[update.PollAnswer.PollID].voters
+				alreadyVoted := false
 
-			updateVoteStatus := poll[update.PollAnswer.PollID]
-
-			if alreadyVoted { //if user already voted, we just make another check whether he selected yes/no and store it
-
-				accepts := false
-				selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
-				if selectedYes { //"Yes" should be first option in poll
-					accepts = true
+				var voterNumber int
+				for n, votersList := range existingVoters {
+					if votersList.tgid == update.PollAnswer.User.ID {
+						alreadyVoted = true
+						voterNumber = n
+					}
 				}
 
-				updateVoteStatus.voters[voterNumber].accepts = accepts
-				poll[update.PollAnswer.PollID] = updateVoteStatus
+				updateVoteStatus := poll[update.PollAnswer.PollID]
 
-			} else { //if user did not vote, we add him to an array with his opinion
+				if alreadyVoted { //if user already voted, we just make another check whether he selected yes/no and store it
 
-				accepts := false
-				selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
-				if selectedYes {
-					accepts = true //"Yes" should be first option in poll
+					accepts := false
+					selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
+					if selectedYes { //"Yes" should be first option in poll
+						accepts = true
+					}
+
+					updateVoteStatus.voters[voterNumber].accepts = accepts
+					poll[update.PollAnswer.PollID] = updateVoteStatus
+
+				} else { //if user did not vote, we add him to an array with his opinion
+
+					accepts := false
+					selectedYes := reflect.DeepEqual(yesChosen, update.PollAnswer.OptionIDs)
+					if selectedYes {
+						accepts = true //"Yes" should be first option in poll
+					}
+
+					newVoter := Voter{update.PollAnswer.User.ID, accepts}
+					i := updateVoteStatus.voters
+					updateArray := append(i, newVoter)
+					updateVoteStatus.voters = updateArray
+					poll[update.PollAnswer.PollID] = updateVoteStatus
+					fmt.Println("Voting successful!")
 				}
 
-				newVoter := Voter{update.PollAnswer.User.ID, accepts}
-				i := updateVoteStatus.voters
-				updateArray := append(i, newVoter)
-				updateVoteStatus.voters = updateArray
-				poll[update.PollAnswer.PollID] = updateVoteStatus
-				fmt.Println("Voting successful!")
+			} else { //if poll is closed, then next incoming update triggers this block, which returns the result
+
+				fmt.Println("Calculating happens!")
+				var YesPower, NoPower *big.Int
+
+				existingVoters := poll[update.PollAnswer.PollID].voters
+
+				for _, votersList := range existingVoters {
+
+					votepower, err := CalculatePersonPower(client_bc, auth, token_address, passportSession, token_type, votersList.tgid)
+					if err != nil {
+						votepower = big.NewInt(0)
+					}
+
+					if votersList.accepts {
+						var c *big.Int //I'm not sure how the Add. func works, so I've decided to add a local variable
+						c.Add(YesPower, votepower)
+						YesPower = c
+					} else {
+						var c *big.Int
+						c.Add(NoPower, votepower)
+						NoPower = c
+					}
+				}
+
+				//final result calculation
+				switch YesPower.Cmp(NoPower) {
+
+				case -1:
+					accepted = false
+				case 0:
+					// parity
+					accepted = false
+				case 1:
+					accepted = true
+				}
+
+				finished = true
+
 			}
-
-			//if poll is closed, then next incoming update triggers this block, which returns the result
-
-		}
-
-	} else if update.Message != nil && time.Now().Unix() >= beginning+duration {
-
-		fmt.Println("Calculating happens!")
-		NoPower := new(big.Int)
-		YesPower := new(big.Int)
-		existingVoters := poll[pollId].voters
-
-		for _, votersList := range existingVoters {
-
-			votepower, err := CalculatePersonPower(client_bc, auth, token_address, passportSession, token_type, votersList.tgid)
-			if err != nil {
-				votepower = big.NewInt(0)
-			}
-
-			if votersList.accepts {
-				c := new(big.Int) //I'm not sure how the Add. func works, so I've decided to add a local variable
-				c.Add(YesPower, votepower)
-				YesPower = c
-			} else {
-				c := new(big.Int)
-				c.Add(NoPower, votepower)
-				NoPower = c
-			}
-
-			//final result calculation
-			switch YesPower.Cmp(NoPower) {
-
-			case -1:
-				accepted = false
-			case 0:
-				// parity
-				accepted = false
-			case 1:
-				accepted = true
-			}
-
-			finished = true
 
 		}
 
 	}
-
 	return accepted, finished
 }

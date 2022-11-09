@@ -63,6 +63,10 @@ type user struct {
 
 var pollToChat = make(map[string]int64)
 
+var pollToBeginning = make(map[string]int64)
+
+var chatToPoll = make(map[int64]string)
+
 type event_bc = *union.UnionApplicationForJoinIndexed
 
 var baseURL = "http://localhost:3000/dao"
@@ -408,38 +412,50 @@ func main() {
 
 						poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].chatid, userDatabase[update.Message.Chat.ID].pollDuration, userDatabase[update.Message.Chat.ID].pollTopic)
 
-						
 						sentMessage, _ := bot.Send(poll)
 						pollToChat[sentMessage.Poll.ID] = userDatabase[update.Message.Chat.ID].chatid
-
+						pollToBeginning[sentMessage.Poll.ID] = time.Now().Unix()
+						chatToPoll[update.Message.Chat.ID] = sentMessage.Poll.ID
 					}
 
 				}
 			}
-		} else if update.PollAnswer != nil {
-			fmt.Println("got poll answer!")
+		}
+		if (update.PollAnswer != nil && userDatabase[pollToChat[update.PollAnswer.PollID]].dialog_status == 4) || (update.Message != nil && userDatabase[update.Message.Chat.ID].dialog_status == 4) {
 
-			pollkey := update.PollAnswer.PollID
-			chatid := pollToChat[pollkey]
+			fmt.Println("got update! statuds is still 4")
+			var pollkey string
+			var chatid int64
+
+			if update.PollAnswer != nil {
+				pollkey = update.PollAnswer.PollID
+				chatid = pollToChat[pollkey]
+			} else if update.Message != nil {
+				chatid = update.Message.Chat.ID
+				pollkey = chatToPoll[chatid]
+			}
 
 			tokenAddress := common.HexToAddress(userDatabase[chatid].vtt)
-					tokenType := userDatabase[chatid].votingtype
-					accepted, finished := voter.VoteInProgress(update, client, auth, tokenAddress, passportSession, tokenType)
-
-					timeToSleep := userDatabase[chatid].pollDuration * 
-					if finished {
-						if updateDb, ok := userDatabase[chatid]; ok {
-							updateDb.dialog_status = 1
-							text := "Was declined!"
-							if accepted {
-								text = "Was accepted!"
-							}
-							userDatabase[chatid] = updateDb
-							msg := tgbotapi.NewMessage(userDatabase[chatid].chatid, text)
-							bot.Send(msg)
-
-						}
+			tokenType := userDatabase[chatid].votingtype
+			duration := userDatabase[chatid].pollDuration * 120
+			beginning := pollToBeginning[pollkey]
+			accepted, finished := voter.VoteInProgress(duration, beginning, update, client, auth, tokenAddress, passportSession, tokenType, pollkey)
+			fmt.Println("Finished is:", finished)
+			fmt.Println("Accepted is:", accepted)
+			//timeToSleep := userDatabase[chatid].pollDuration *
+			if finished {
+				if updateDb, ok := userDatabase[chatid]; ok {
+					updateDb.dialog_status = 1
+					text := "Was declined!"
+					if accepted {
+						text = "Was accepted!"
 					}
+					userDatabase[chatid] = updateDb
+					msg := tgbotapi.NewMessage(userDatabase[chatid].chatid, text)
+					bot.Send(msg)
+
+				}
+			}
 
 		}
 	}
