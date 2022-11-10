@@ -27,9 +27,8 @@ import (
 	"github.com/joho/godotenv"
 
 	token_erc20 "github.com/MoonSHRD/IKY-telegram-bot/artifacts/ERC20"
+	token_nft "github.com/MoonSHRD/IKY-telegram-bot/artifacts/ERC721"
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
-
-	//passport "IKY-telegram-bot/artifacts/TGPassport"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -119,6 +118,49 @@ func CalculatePersonPower(client_bc *ethclient.Client, auth *bind.TransactOpts, 
 			log.Println(err)
 			return nil, err
 		}
+	}
+	// enum 2 = erc721 (nft owners can vote)
+	if token_type == uint8(2) {
+		// NFT vote
+		tokenContract, err := token_nft.NewTokenERC721(token_address, client_bc)
+		if err != nil { //TODO return err
+			log.Println("can't estiblish connection with VoteToken contract")
+			log.Println(err)
+		}
+
+		sessionToken := &token_nft.TokenERC721Session{
+			Contract: tokenContract,
+			CallOpts: bind.CallOpts{
+				Pending: false,
+				From:    auth.From,
+				Context: context.Background(),
+			},
+			TransactOpts: bind.TransactOpts{
+				From:     auth.From,
+				Signer:   auth.Signer,
+				GasLimit: 0,
+				GasPrice: nil,
+				Context:  context.Background(),
+			},
+		}
+
+		user_address, err := GetAddressByTgID(passportSession, tgid)
+		if err != nil {
+			log.Println("can't get user address, possible wrong address for token contract")
+			log.Println(err)
+			return nil, err
+		}
+
+		sum, err = sessionToken.BalanceOf(user_address)
+		if err != nil {
+			log.Println("can't get balanceOf user, possible wrong address for token contract")
+			log.Println(err)
+			return nil, err
+		}
+
+	}
+	if token_type == uint8(1) {
+		// TODO: ERC20Votes vote
 	}
 	fmt.Println(sum)
 	return sum, err
