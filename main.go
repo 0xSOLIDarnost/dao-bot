@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -15,6 +16,8 @@ import (
 	passport "github.com/MoonSHRD/IKY-telegram-bot/artifacts/TGPassport"
 
 	multisig "github.com/0xSOLIDarnost/MultisigLegacy/artifacts/multisig"
+	pogreb "github.com/akrylysov/pogreb"
+
 	//union "github.com/daseinsucks/MultisigBot/artifacts"
 
 	voter "github.com/0xSOLIDarnost/dao-bot/lib/voter"
@@ -33,10 +36,10 @@ import (
 var numericKeyboard = tgbotapi.NewReplyKeyboard(
 	tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("ERC20"),
-		tgbotapi.NewKeyboardButton("ERC20Snapshot"),
+		tgbotapi.NewKeyboardButton("ERC721"),
 	),
 	tgbotapi.NewKeyboardButtonRow(
-		tgbotapi.NewKeyboardButton("ERC721")),
+		tgbotapi.NewKeyboardButton("ERC20Votes")),
 )
 
 var nullAddress common.Address = common.HexToAddress("0x0000000000000000000000000000000000000000")
@@ -46,19 +49,19 @@ var tgApiKey, err = os.ReadFile(".secret")
 var bot, _ = tgbotapi.NewBotAPI(string(tgApiKey))
 
 type user struct {
-	chat          *tgbotapi.Chat
-	usertype      *tgbotapi.User
-	tgid          int64
-	chatid        int64
-	tg_chatname   string
-	dialog_status int64
-	setup_status  int64
-	repo          string
-	dao           string
-	votingtype    uint8
-	vtt           string
-	pollTopic     string
-	pollDuration  int64
+	Chat         *tgbotapi.Chat
+	Usertype     *tgbotapi.User
+	Tgid         int64
+	ChatID       int64
+	TgChatName   string
+	DialogStatus int64
+	SetupStatus  int64
+	Repo         string
+	Dao          string
+	VotingType   uint8
+	VTC          string
+	PollTopic    string
+	PollDuration int64
 }
 
 var pollToChat = make(map[string]int64)
@@ -74,19 +77,20 @@ var baseURL = "http://localhost:3000/dao"
 var user_id_query = "?user_id="
 var chat_query = "&chat_id="
 var address_query = "&address="
-var type_query = "&votingtype="
+var type_query = "&VotingType="
 var contract_query = "&votingtokencontract="
 var name_query = "&daoname="
 
 var ch_index = make(chan *union.UnionApplicationForJoinIndexed)
 
-//localhost:3000/dao?user_id=1337&chat_id=1337&address=23746624386&votingtype=1&votingtokencontract=3278465ASDW23&daoname=lol
+//localhost:3000/dao?user_id=1337&chat_id=1337&address=23746624386&VotingType=1&votingtokencontract=3278465ASDW23&daoname=lol
 
-//main database for dialogs, key (int64) is telegram user id
+//main database for dialogs, key (int64) is telegram chat id
 var userDatabase = make(map[int64]user) // consider to change in persistend data storage?
 
 func main() {
 
+	tgdb, _ := pogreb.Open("telegramdb", nil)
 	_ = godotenv.Load()
 	ctx := context.Background()
 	pk := os.Getenv("PK") // load private key from env
@@ -190,11 +194,11 @@ func main() {
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
-	//TODO: add check tgid == daoaddress(tgid)
+	//TODO: add check Tgid == daoaddress(Tgid)
 	//whenever bot gets a new message, check for user id in the database happens, if it's a new user, the entry in the database is created.
 	for update := range updates {
 		if update.Message != nil {
-			fmt.Println("got message! Dialog status:", userDatabase[update.Message.Chat.ID].dialog_status)
+			fmt.Println("got message! Dialog status:", userDatabase[update.Message.Chat.ID].DialogStatus)
 		}
 
 		if update.Message != nil {
@@ -205,15 +209,19 @@ func main() {
 				isRegistered := checkDao(auth, UnionCaller, update.Message.Chat.ID)
 				if isRegistered {
 					updateDb := userDatabase[update.Message.Chat.ID]
-					updateDb.setup_status = 0
-					updateDb.dialog_status = 1
+
+					updateDb = restoreUserViaJson(tgdb, update.Message.Chat.ID) //if the chat is registered, it is present in our db
+					updateDb.SetupStatus = 0
+					updateDb.DialogStatus = 1
+
+					fmt.Println(updateDb)
 
 					//TODO: Remove this before release
-					if userDatabase[update.Message.Chat.ID].chatid == -1001687122205 {
-						updateDb.repo = "repo"
-						updateDb.votingtype = 0
-						updateDb.vtt = "0x1dbb4595a3148811c566d80fdb505d51a3cce48f"
-						updateDb.dao = "0xDCDd74DEf2eE8b33dfD132f0DF65524493941358"
+					if userDatabase[update.Message.Chat.ID].ChatID == -1001687122205 {
+						updateDb.Repo = "Repo"
+						updateDb.VotingType = 0
+						updateDb.VTC = "0x1dbb4595a3148811c566d80fdb505d51a3cce48f"
+						updateDb.Dao = "0xDCDd74DEf2eE8b33dfD132f0DF65524493941358"
 						userDatabase[update.Message.Chat.ID] = updateDb
 						fmt.Println("Our data are:", userDatabase[update.Message.Chat.ID])
 					}
@@ -221,60 +229,60 @@ func main() {
 					userDatabase[update.Message.Chat.ID] = updateDb
 
 				} else {
-					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Your Union is not registered yet!\nLet's register it!.\nFirst, send me the link to your repo.")
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Your Union is not registered yet!\nLet's register it!.\nFirst, send me the link to your Repo.")
 					bot.Send(msg)
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						updateDb.dialog_status = 0
-						updateDb.setup_status = 1
+						updateDb.DialogStatus = 0
+						updateDb.SetupStatus = 1
 						userDatabase[update.Message.Chat.ID] = updateDb
 					}
 				}
 
-			} else if userDatabase[update.Message.Chat.ID].setup_status != 0 {
-				switch userDatabase[update.Message.Chat.ID].setup_status {
+			} else if userDatabase[update.Message.Chat.ID].SetupStatus != 0 {
+				switch userDatabase[update.Message.Chat.ID].SetupStatus {
 
 				case 1:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						updateDb.repo = update.Message.Text
-						updateDb.setup_status = 2
+						updateDb.Repo = update.Message.Text
+						updateDb.SetupStatus = 2
 						userDatabase[update.Message.Chat.ID] = updateDb
-						chatvar := userDatabase[update.Message.Chat.ID].chat
-						uservar := userDatabase[update.Message.Chat.ID].usertype
+						chatvar := userDatabase[update.Message.Chat.ID].Chat
+						uservar := userDatabase[update.Message.Chat.ID].Usertype
 						isAdmin := checkAdmin(chatvar, uservar)
 						if !isAdmin {
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Sorry, but only admin of the chat may connect it to the DAO!")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Sorry, but only admin of the Chat may connect it to the DAO!")
 							bot.Send(msg)
 							delete(userDatabase, update.Message.Chat.ID)
 						}
-						isUserRegistered := checkUser(auth, passportCaller, userDatabase[update.Message.Chat.ID].tgid)
+						isUserRegistered := checkUser(auth, passportCaller, userDatabase[update.Message.Chat.ID].Tgid)
 						if !isUserRegistered {
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Sorry, but before attaching DAO you should apply for passport here:")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Sorry, but before attaching DAO you should apply for passport here:")
 							bot.Send(msg)
 							delete(userDatabase, update.Message.Chat.ID)
 						}
 						if isUserRegistered && isAdmin {
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, tell me your Multisig address!")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, tell me your Multisig address!")
 							bot.Send(msg)
 						}
 					}
 
 				case 2:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						updateDb.dao = update.Message.Text
-						updateDb.setup_status = 3
+						updateDb.Dao = update.Message.Text
+						updateDb.SetupStatus = 3
 						userDatabase[update.Message.Chat.ID] = updateDb
 
-						daoaddress := userDatabase[update.Message.Chat.ID].dao
+						daoaddress := userDatabase[update.Message.Chat.ID].Dao
 						wallet, _ := multisig.NewMultiSigWalletCaller(common.HexToAddress(daoaddress), client)
 
 						botIsOwner := checkBotAsOwner(auth, wallet, accountAddress)
 
 						if botIsOwner {
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Cool, now I need to know your voting token's type")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Cool, now I need to know your voting token's type")
 							msg.ReplyMarkup = numericKeyboard
 							bot.Send(msg)
 						} else {
-							msg1 := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Sorry, but this bot is not the owner of the multisig wallet.")
+							msg1 := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Sorry, but this bot is not the owner of the multisig wallet.")
 							bot.Send(msg1)
 							delete(userDatabase, update.Message.Chat.ID)
 						}
@@ -285,52 +293,52 @@ func main() {
 						var tokenType uint8
 						if update.Message.Text == "ERC20" {
 							tokenType = 0
-						} else if update.Message.Text == "ERC20Snapshot" {
-							tokenType = 1
 						} else if update.Message.Text == "ERC20Votes" {
+							tokenType = 1
+						} else if update.Message.Text == "ERC721" {
 							tokenType = 2
 						}
 
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-							updateDb.votingtype = tokenType
-							updateDb.setup_status = 4
+							updateDb.VotingType = tokenType
+							updateDb.SetupStatus = 4
 							userDatabase[update.Message.Chat.ID] = updateDb
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, last question: what's the address of your voting token?")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, last question: what's the address of your voting token?")
 							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 							bot.Send(msg)
 						}
 
 					} else {
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "That's not the type!")
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "That's not the type!")
 						bot.Send(msg)
 					}
 
 				case 4:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						updateDb.vtt = update.Message.Text
-						updateDb.setup_status = 4
+						updateDb.VTC = update.Message.Text
+						updateDb.SetupStatus = 4
 						userDatabase[update.Message.Chat.ID] = updateDb
 
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Alright, now apply for union here:")
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Alright, now apply for union here:")
 						bot.Send(msg)
 
-						userIDint := userDatabase[update.Message.Chat.ID].tgid
+						userIDint := userDatabase[update.Message.Chat.ID].Tgid
 						userID := fmt.Sprint(userIDint)
 
-						chatIDint := userDatabase[update.Message.Chat.ID].chatid
+						chatIDint := userDatabase[update.Message.Chat.ID].ChatID
 						chatID := fmt.Sprint(chatIDint)
 
-						address := userDatabase[update.Message.Chat.ID].dao
+						address := userDatabase[update.Message.Chat.ID].Dao
 
-						votingTypeint := userDatabase[update.Message.Chat.ID].votingtype
+						votingTypeint := userDatabase[update.Message.Chat.ID].VotingType
 						votingType := fmt.Sprint(votingTypeint)
 
-						vtt := userDatabase[update.Message.Chat.ID].vtt
-						chatName := userDatabase[update.Message.Chat.ID].tg_chatname
+						VTC := userDatabase[update.Message.Chat.ID].VTC
+						chatName := userDatabase[update.Message.Chat.ID].TgChatName
 
-						link := baseURL + user_id_query + userID + chat_query + chatID + address_query + address + type_query + votingType + contract_query + vtt + name_query + chatName
+						link := baseURL + user_id_query + userID + chat_query + chatID + address_query + address + type_query + votingType + contract_query + VTC + name_query + chatName
 
-						msg2 := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, link)
+						msg2 := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, link)
 						bot.Send(msg2)
 
 						tgid_array := make([]int64, 1)
@@ -354,12 +362,19 @@ func main() {
 									fmt.Println("DAO tg_id:", eventResult.ChatId)
 									fmt.Println("DAO wallet address:", eventResult.MultyWalletAddress)
 									applyer_tg_string := fmt.Sprint(eventResult.ChatId)
-									msg = tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, " your application have been recived "+applyer_tg_string)
+									msg = tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Your application for chat "+applyer_tg_string+" was received!")
 									bot.Send(msg)
 									ApproveDAO(auth, UnionSession, eventResult.MultyWalletAddress)
 									if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-										updateDb.setup_status = 0
+										updateDb.SetupStatus = 0
+										updateDb.DialogStatus = 1
 										userDatabase[update.Message.Chat.ID] = updateDb
+
+										userToSave, _ := json.Marshal(userDatabase[update.Message.Chat.ID])
+										dbKey := []byte(strconv.FormatInt(update.Message.Chat.ID, 10))
+
+										tgdb.Put(dbKey, userToSave)
+
 										subscription.Unsubscribe()
 										break EventLoop
 									}
@@ -371,7 +386,7 @@ func main() {
 				}
 			} else {
 
-				switch userDatabase[update.Message.Chat.ID].dialog_status {
+				switch userDatabase[update.Message.Chat.ID].DialogStatus {
 
 				//first check for user status, (for a new user status 0 is set automatically), then user reply for the first bot message is logged to a database as name AND user status is updated
 
@@ -381,9 +396,9 @@ func main() {
 
 					case "/startVote":
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-							updateDb.dialog_status = 2
+							updateDb.DialogStatus = 2
 							userDatabase[update.Message.Chat.ID] = updateDb
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, let's start a vote! Enter the topic.")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, let's start a vote! Enter the topic.")
 							bot.Send(msg)
 
 						}
@@ -393,10 +408,10 @@ func main() {
 				case 2:
 
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						updateDb.pollTopic = update.Message.Text
-						updateDb.dialog_status = 3
+						updateDb.PollTopic = update.Message.Text
+						updateDb.DialogStatus = 3
 						userDatabase[update.Message.Chat.ID] = updateDb
-						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].chatid, "Okay, for how long in hours you want to be active?")
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, for how long in hours you want to be active?")
 						bot.Send(msg)
 
 					}
@@ -406,14 +421,14 @@ func main() {
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 						duration, _ := strconv.ParseInt(update.Message.Text, 10, 64)
 
-						updateDb.pollDuration = duration
-						updateDb.dialog_status = 4
+						updateDb.PollDuration = duration
+						updateDb.DialogStatus = 4
 						userDatabase[update.Message.Chat.ID] = updateDb
 
-						poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].chatid, userDatabase[update.Message.Chat.ID].pollDuration, userDatabase[update.Message.Chat.ID].pollTopic)
+						poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, userDatabase[update.Message.Chat.ID].PollTopic)
 
 						sentMessage, _ := bot.Send(poll)
-						pollToChat[sentMessage.Poll.ID] = userDatabase[update.Message.Chat.ID].chatid
+						pollToChat[sentMessage.Poll.ID] = userDatabase[update.Message.Chat.ID].ChatID
 						pollToBeginning[sentMessage.Poll.ID] = time.Now().Unix()
 						chatToPoll[update.Message.Chat.ID] = sentMessage.Poll.ID
 					}
@@ -421,37 +436,37 @@ func main() {
 				}
 			}
 		}
-		if (update.PollAnswer != nil && userDatabase[pollToChat[update.PollAnswer.PollID]].dialog_status == 4) || (update.Message != nil && userDatabase[update.Message.Chat.ID].dialog_status == 4) {
+		if (update.PollAnswer != nil && userDatabase[pollToChat[update.PollAnswer.PollID]].DialogStatus == 4) || (update.Message != nil && userDatabase[update.Message.Chat.ID].DialogStatus == 4) {
 
-			fmt.Println("got update! statuds is still 4")
+			fmt.Println("got update! status is still 4")
 			var pollkey string
-			var chatid int64
+			var ChatID int64
 
 			if update.PollAnswer != nil {
 				pollkey = update.PollAnswer.PollID
-				chatid = pollToChat[pollkey]
+				ChatID = pollToChat[pollkey]
 			} else if update.Message != nil {
-				chatid = update.Message.Chat.ID
-				pollkey = chatToPoll[chatid]
+				ChatID = update.Message.Chat.ID
+				pollkey = chatToPoll[ChatID]
 			}
 
-			tokenAddress := common.HexToAddress(userDatabase[chatid].vtt)
-			tokenType := userDatabase[chatid].votingtype
-			duration := userDatabase[chatid].pollDuration * 120
+			tokenAddress := common.HexToAddress(userDatabase[ChatID].VTC)
+			tokenType := userDatabase[ChatID].VotingType
+			duration := userDatabase[ChatID].PollDuration * 120
 			beginning := pollToBeginning[pollkey]
 			accepted, finished := voter.VoteInProgress(duration, beginning, update, client, auth, tokenAddress, passportSession, tokenType, pollkey)
 			fmt.Println("Finished is:", finished)
 			fmt.Println("Accepted is:", accepted)
-			//timeToSleep := userDatabase[chatid].pollDuration *
+			//timeToSleep := userDatabase[ChatID].PollDuration *
 			if finished {
-				if updateDb, ok := userDatabase[chatid]; ok {
-					updateDb.dialog_status = 1
+				if updateDb, ok := userDatabase[ChatID]; ok {
+					updateDb.DialogStatus = 1
 					text := "Was declined!"
 					if accepted {
 						text = "Was accepted!"
 					}
-					userDatabase[chatid] = updateDb
-					msg := tgbotapi.NewMessage(userDatabase[chatid].chatid, text)
+					userDatabase[ChatID] = updateDb
+					msg := tgbotapi.NewMessage(userDatabase[ChatID].ChatID, text)
 					bot.Send(msg)
 
 				}
@@ -461,11 +476,11 @@ func main() {
 	}
 }
 
-func checkDao(auth *bind.TransactOpts, pc *union.UnionCaller, tgid int64) bool {
+func checkDao(auth *bind.TransactOpts, pc *union.UnionCaller, Tgid int64) bool {
 	registration, err := pc.DaoAddresses(&bind.CallOpts{
 		From:    auth.From,
 		Context: context.Background(),
-	}, tgid)
+	}, Tgid)
 
 	log.Println(registration)
 
@@ -480,11 +495,11 @@ func checkDao(auth *bind.TransactOpts, pc *union.UnionCaller, tgid int64) bool {
 	}
 }
 
-func checkUser(auth *bind.TransactOpts, pc *passport.PassportCaller, tgid int64) bool {
+func checkUser(auth *bind.TransactOpts, pc *passport.PassportCaller, Tgid int64) bool {
 	registration, err := pc.TgIdToAddress(&bind.CallOpts{
 		From:    auth.From,
 		Context: context.Background(),
-	}, tgid)
+	}, Tgid)
 
 	log.Println(registration)
 
@@ -499,10 +514,10 @@ func checkUser(auth *bind.TransactOpts, pc *passport.PassportCaller, tgid int64)
 	}
 }
 
-func checkAdmin(chat *tgbotapi.Chat, user *tgbotapi.User) bool {
+func checkAdmin(Chat *tgbotapi.Chat, user *tgbotapi.User) bool {
 	thing := tgbotapi.ChatConfigWithUser{
-		ChatID:             chat.ID,
-		SuperGroupUsername: chat.ChatConfig().SuperGroupUsername,
+		ChatID:             Chat.ID,
+		SuperGroupUsername: Chat.ChatConfig().SuperGroupUsername,
 		UserID:             user.ID,
 	}
 	thing2 := tgbotapi.GetChatMemberConfig{thing}
@@ -559,4 +574,25 @@ func checkBotAsOwner(auth *bind.TransactOpts, pc *multisig.MultiSigWalletCaller,
 	}, botAddress)
 
 	return isOwner
+}
+
+func restoreUserViaJson(database *pogreb.DB, chatid int64) user {
+	defer handlePanic()
+
+	thing, _ := database.Get([]byte(strconv.FormatInt(chatid, 10)))
+
+	var userstruct user
+	json.Unmarshal(thing, &userstruct)
+	return userstruct
+}
+
+func handlePanic() {
+
+	// detect if panic occurs or not
+	a := recover()
+
+	if a != nil {
+		fmt.Println("RECOVER", a)
+	}
+
 }
