@@ -1,14 +1,4 @@
-06.10.2022 Use these
-Goerli:
-TGPassport deployed to: 0x155C672bFdD482F2D67a7cd30e3acDc3e59D5092
-Union deployed to: 0x5c845F2B0B81b4Eb9C9B4ed33b9e2a9eCF3B66d9
-Sample erc20 deployed to:  0xA26c9B46629E03E9bB62Db83bb0ff35138Fd5939
-owner address: 0xc905803BbC804fECDc36850281fEd6520A346AC5
-passport fee: BigNumber { value: "1000" }
-applierd user wallet : 0xc905803BbC804fECDc36850281fEd6520A346AC5
-approved user wallet : 0xc905803BbC804fECDc36850281fEd6520A346AC5
-apllied dao address: 0xA26c9B46629E03E9bB62Db83bb0ff35138Fd5939
-approved dao address: 0xA26c9B46629E03E9bB62Db83bb0ff35138Fd5939
+
 
 
 18.10.2022
@@ -23,7 +13,17 @@ approved user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
 apllied dao address: 0x72e9B51a9882a4243d4b06c673faaC2216cC65AE
 approved dao address: 0x72e9B51a9882a4243d4b06c673faaC2216cC65AE
 
-
+Goerli v0.1.0
+TGPassport deployed to: 0x05044C88AB66a058D523038039d64cd101b9D8c9
+Union deployed to: 0xef2DCEA186FA90FcD0c44C3caaE81E4586eE0685
+Sample erc20 deployed to:  0xFbC45497848cc7438c528015271d73B9d8712385
+test dao address: 0x9b393D071fa16458cb6CE3256F50eD1D2c776F7D
+owner address: 0x16d97A46030C5D3D705bca45439e48529997D8b2
+passport fee: BigNumber { value: "1000" }
+applierd user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
+approved user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
+apllied dao address: 0x9b393D071fa16458cb6CE3256F50eD1D2c776F7D
+approved dao address: 0x9b393D071fa16458cb6CE3256F50eD1D2c776F7D
 
 
 Second test data in Rinkeby:
