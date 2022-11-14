@@ -216,7 +216,7 @@ func StartPoll(chatId int64, durationInHours int64, topic string) tgbotapi.SendP
 	pollToSend := tgbotapi.NewPoll(chatId, topic, "Yes", "No")
 
 	currentDate := time.Now().Unix()
-	hoursInSeconds := durationInHours * 120
+	hoursInSeconds := durationInHours * 120 //TODO: change to 3600!!!
 	timeToClose := currentDate + hoursInSeconds
 	fmt.Println(hoursInSeconds)
 	timeToCloseInt := int(timeToClose)
