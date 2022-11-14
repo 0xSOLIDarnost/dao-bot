@@ -42,6 +42,14 @@ var numericKeyboard = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButton("ERC20Votes")),
 )
 
+var mainKeyboard = tgbotapi.NewReplyKeyboard(
+	tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("Start a vote"),
+	),
+	tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("Help message")),
+)
+
 var nullAddress common.Address = common.HexToAddress("0x0000000000000000000000000000000000000000")
 
 //to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
@@ -193,6 +201,8 @@ func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
+	helptext := "Hi! This bot is designed to operate DAO. If you're not registered, we'll walk you through it.\nOtherwise, use the provided keyboard to operate it"
+
 	updates := bot.GetUpdatesChan(u)
 	//TODO: add check Tgid == daoaddress(Tgid)
 	//whenever bot gets a new message, check for user id in the database happens, if it's a new user, the entry in the database is created.
@@ -226,10 +236,15 @@ func main() {
 						fmt.Println("Our data are:", userDatabase[update.Message.Chat.ID])
 					}
 
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, helptext)
+					msg.ReplyMarkup = mainKeyboard
+					bot.Send(msg)
 					userDatabase[update.Message.Chat.ID] = updateDb
 
 				} else {
-					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Your Union is not registered yet!\nLet's register it!.\nFirst, send me the link to your Repo.")
+					himsg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, helptext)
+					bot.Send(himsg)
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Your Union is not registered yet!\nLet's register it!\nFirst, send me the link to your Repo.")
 					bot.Send(msg)
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 						updateDb.DialogStatus = 0
@@ -304,7 +319,7 @@ func main() {
 							updateDb.SetupStatus = 4
 							userDatabase[update.Message.Chat.ID] = updateDb
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, last question: what's the address of your voting token?")
-							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
+							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(false)
 							bot.Send(msg)
 						}
 
@@ -363,6 +378,7 @@ func main() {
 									fmt.Println("DAO wallet address:", eventResult.MultyWalletAddress)
 									applyer_tg_string := fmt.Sprint(eventResult.ChatId)
 									msg = tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Your application for chat "+applyer_tg_string+" was received!")
+									msg.ReplyMarkup = mainKeyboard
 									bot.Send(msg)
 									ApproveDAO(auth, UnionSession, eventResult.MultyWalletAddress)
 									if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
@@ -394,15 +410,19 @@ func main() {
 
 					switch update.Message.Text {
 
-					case "/startVote":
+					case "Start a vote":
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 							updateDb.DialogStatus = 2
 							userDatabase[update.Message.Chat.ID] = updateDb
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, let's start a vote! Enter the topic.")
+							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(false)
 							bot.Send(msg)
 
 						}
 
+					case "Help message":
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, helptext)
+						bot.Send(msg)
 					}
 
 				case 2:
@@ -425,9 +445,17 @@ func main() {
 						updateDb.DialogStatus = 4
 						userDatabase[update.Message.Chat.ID] = updateDb
 
+						timeOfEnd := time.Now().Unix() + (duration * 120) //TODO: change to 3600!!!
+
+						timeUTCstring := time.Unix(timeOfEnd, 0).Format("15:04:05 02-01-2006")
+
+						msgWithTime := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Please, send any message to this chat after "+timeUTCstring+" to summarize the results.")
+						bot.Send(msgWithTime)
+
 						poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, userDatabase[update.Message.Chat.ID].PollTopic)
 
 						sentMessage, _ := bot.Send(poll)
+
 						pollToChat[sentMessage.Poll.ID] = userDatabase[update.Message.Chat.ID].ChatID
 						pollToBeginning[sentMessage.Poll.ID] = time.Now().Unix()
 						chatToPoll[update.Message.Chat.ID] = sentMessage.Poll.ID
@@ -467,6 +495,7 @@ func main() {
 					}
 					userDatabase[ChatID] = updateDb
 					msg := tgbotapi.NewMessage(userDatabase[ChatID].ChatID, text)
+					msg.ReplyMarkup = mainKeyboard
 					bot.Send(msg)
 
 				}
