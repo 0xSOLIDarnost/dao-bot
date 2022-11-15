@@ -413,6 +413,7 @@ func main() {
 					case "Start a vote":
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 							updateDb.DialogStatus = 2
+							updateDb.Tgid = update.Message.From.ID
 							userDatabase[update.Message.Chat.ID] = updateDb
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, let's start a vote! Enter the topic.")
 							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(false)
@@ -437,28 +438,33 @@ func main() {
 					}
 
 				case 3:
+					duration, err := strconv.ParseInt(update.Message.Text, 10, 64)
+					if err == nil && duration > 0 {
 
-					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						duration, _ := strconv.ParseInt(update.Message.Text, 10, 64)
+						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 
-						updateDb.PollDuration = duration
-						updateDb.DialogStatus = 4
-						userDatabase[update.Message.Chat.ID] = updateDb
+							updateDb.PollDuration = duration
+							updateDb.DialogStatus = 4
+							userDatabase[update.Message.Chat.ID] = updateDb
 
-						timeOfEnd := time.Now().Unix() + (duration * 120) //TODO: change to 3600!!!
+							timeOfEnd := time.Now().Unix() + (duration * 120) //TODO: change to 3600!!!
 
-						timeUTCstring := time.Unix(timeOfEnd, 0).Format("15:04:05 02-01-2006")
+							timeUTCstring := time.Unix(timeOfEnd, 0).Format("15:04:05 02-01-2006")
 
-						msgWithTime := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Please, send any message to this chat after "+timeUTCstring+" to summarize the results.")
-						bot.Send(msgWithTime)
+							msgWithTime := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Please, send any message to this chat after "+timeUTCstring+" to summarize the results.")
+							bot.Send(msgWithTime)
 
-						poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, userDatabase[update.Message.Chat.ID].PollTopic)
+							poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, userDatabase[update.Message.Chat.ID].PollTopic)
 
-						sentMessage, _ := bot.Send(poll)
+							sentMessage, _ := bot.Send(poll)
 
-						pollToChat[sentMessage.Poll.ID] = userDatabase[update.Message.Chat.ID].ChatID
-						pollToBeginning[sentMessage.Poll.ID] = time.Now().Unix()
-						chatToPoll[update.Message.Chat.ID] = sentMessage.Poll.ID
+							pollToChat[sentMessage.Poll.ID] = userDatabase[update.Message.Chat.ID].ChatID
+							pollToBeginning[sentMessage.Poll.ID] = time.Now().Unix()
+							chatToPoll[update.Message.Chat.ID] = sentMessage.Poll.ID
+						}
+					} else {
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Please, send the poll desired duration in hours")
+						bot.Send(msg)
 					}
 
 				}
