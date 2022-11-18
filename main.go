@@ -85,7 +85,7 @@ var baseURL = "http://localhost:3000/dao"
 var user_id_query = "?user_id="
 var chat_query = "&chat_id="
 var address_query = "&address="
-var type_query = "&VotingType="
+var type_query = "&votingtype="
 var contract_query = "&votingtokencontract="
 var name_query = "&daoname="
 
@@ -225,16 +225,6 @@ func main() {
 					updateDb.DialogStatus = 1
 
 					fmt.Println(updateDb)
-
-					//TODO: Remove this before release
-					if userDatabase[update.Message.Chat.ID].ChatID == -1001687122205 {
-						updateDb.Repo = "Repo"
-						updateDb.VotingType = 0
-						updateDb.VTC = "0x1dbb4595a3148811c566d80fdb505d51a3cce48f"
-						updateDb.Dao = "0xDCDd74DEf2eE8b33dfD132f0DF65524493941358"
-						userDatabase[update.Message.Chat.ID] = updateDb
-						fmt.Println("Our data are:", userDatabase[update.Message.Chat.ID])
-					}
 
 					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, helptext)
 					msg.ReplyMarkup = mainKeyboard
