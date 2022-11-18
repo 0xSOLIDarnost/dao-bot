@@ -1,5 +1,7 @@
 package eventDaemon
 
+//package main
+
 import (
 	"context"
 	"fmt"
@@ -62,6 +64,18 @@ var myenv map[string]string
 
 // file with settings for enviroment
 const envLoc = ".env"
+
+/** FOR TESTS ONLY **/
+/*
+func main() {
+	var sub_chan = make(chan *SubmissionMsg)
+	var dep_chan = make(chan *DepositMsg)
+	Start(sub_chan,dep_chan)
+
+}
+*/
+
+
 
 func Start(masterChannelSub chan *SubmissionMsg, masterChannelDep chan *DepositMsg) {
 
