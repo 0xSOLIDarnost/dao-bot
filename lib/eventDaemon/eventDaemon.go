@@ -33,10 +33,29 @@ var chat_ids = make([]int64,0)
 
 var chat_wallets = make(map[int64]common.Address)
 
+// any submitted tx
 type SubmissionMsg struct {
 	chat_id int64
 	SubmissionEvent *multisig.MultiSigWalletSubmission
 }
+
+// Coin deposit
+type DepositMsg struct {
+	chat_id int64
+	DepositEvent *multisig.MultiSigWalletDeposit
+}
+
+type NewOwnerMsg struct {
+	chat_id int64
+	NewOwnerEvent *multisig.MultiSigWalletOwnerAddition
+}
+
+type RemoveOwnerMsg struct {
+	chat_id int64
+	RemoveOwnerEvent *multisig.MultiSigWalletOwnerRemoval
+}
+
+
 // var globalChan chan *SubmissionMsg
 
 var myenv map[string]string
@@ -44,7 +63,7 @@ var myenv map[string]string
 // file with settings for enviroment
 const envLoc = ".env"
 
-func Start(masterChannel chan *SubmissionMsg) {
+func Start(masterChannelSub chan *SubmissionMsg, masterChannelDep chan *DepositMsg) {
 
 
 	loadEnv()
@@ -144,12 +163,14 @@ func Start(masterChannel chan *SubmissionMsg) {
 	
 	//var submission_ch = make(chan *multisig.MultiSigWalletSubmission)
 	var submission_msg = make(chan *SubmissionMsg)
+	var deposit_msg = make(chan *DepositMsg)
 
 
 	
 	for chatID,address := range chat_wallets {
 		//go SubscribeForSubmittedTransactions()
 		go InitiateMultisigSession(ctx,address,submission_msg,chatID)
+		go ListenToDepositMultisig(ctx,address,deposit_msg,chatID)
 		fmt.Printf("for chat_id: %d  ",chatID)
 		fmt.Println("subscribed for multisig address: ", address)
 	}
@@ -179,7 +200,16 @@ func Start(masterChannel chan *SubmissionMsg) {
 			fmt.Println("transaction id:",NewSubmission.SubmissionEvent.TransactionId)
 			fmt.Println("chat id to sent msg:",NewSubmission.chat_id)
 			fmt.Println("data:",NewSubmission.SubmissionEvent.Raw)
-			masterChannel<- NewSubmission
+			masterChannelSub<- NewSubmission
+		}
+	case NewDeposit := <-deposit_msg:
+		{
+			fmt.Println("new DEPOSIT has found in MAIN thread, channels work!")
+			fmt.Println("/n")
+			fmt.Println("donator:",NewDeposit.DepositEvent.Sender)
+			fmt.Println("chat id to sent msg:",NewDeposit.chat_id)
+			fmt.Println("how much was deposit:",NewDeposit.DepositEvent.Value)
+			masterChannelDep<- NewDeposit
 		}
 		}
 		}
@@ -255,6 +285,60 @@ func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Addre
 		}
 		}
 }
+
+
+// Initiate event listener session (go routine) for DEPOSIT Events
+func ListenToDepositMultisig(ctx context.Context,dao_wallet_address common.Address, listenchan chan *DepositMsg, chat_id int64)  {
+
+	//	ctx := context.Background()
+		MultisigInstance,err := multisig.NewMultiSigWallet(dao_wallet_address,GlobalClient)
+		if err != nil {
+			log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
+		}
+	
+		//Wrap a session
+		sessionMultisig := &multisig.MultiSigWalletSession{
+			Contract: MultisigInstance,
+			CallOpts: bind.CallOpts{
+				Pending: true,
+				From:    GlobalAuth.From,
+				Context: context.Background(),
+			},
+			TransactOpts: bind.TransactOpts{
+				From:     GlobalAuth.From,
+				Signer:   GlobalAuth.Signer,
+				GasLimit: 0,   // 0 automatically estimates gas limit
+				GasPrice: nil, // nil automatically suggests gas price
+				Context:  context.Background(),
+			},
+		}
+	
+		var ch = make(chan *multisig.MultiSigWalletDeposit)
+		subscription,err := SubscribeToDepositCoins(sessionMultisig,ch)
+	
+		// Infinite loop for specific Multisig submission
+		EventLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				{
+				subscription.Unsubscribe();
+				break EventLoop
+				}
+		case eventResult:= <-ch:
+			{
+				fmt.Println("/n")
+				//fmt.Println("Somebody want to submit new tx, his address:")
+				fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
+				fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
+				var msg *DepositMsg
+				msg.chat_id = chat_id
+				msg.DepositEvent = eventResult
+				listenchan <-msg
+			}
+			}
+			}
+	}
 
 
 // load enviroment variables from .env file
@@ -336,7 +420,19 @@ func SubscribeForSubmittedTransactions(session *multisig.MultiSigWalletSession, 
 	return subscription,err
 }
 
-//func SubscribeTo
+func SubscribeToDepositCoins(session *multisig.MultiSigWalletSession, listenChannel chan<- *multisig.MultiSigWalletDeposit) (event.Subscription, error) {
+	subscription, err := session.Contract.WatchDeposit(&bind.WatchOpts{
+		Start: nil,
+		Context: nil,
+	},listenChannel,
+	)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("subscribed to Multisig DEPOSIT transactions")
+	return subscription,err
+
+}
 
 func IsTokenTransfer(session *multisig.MultiSigWalletSession, data []byte) (bool,error) {
 	transfer, err := session.Contract.IsTransfer(&session.CallOpts,data)
