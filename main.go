@@ -20,7 +20,9 @@ import (
 
 	//union "github.com/daseinsucks/MultisigBot/artifacts"
 
+	rules "github.com/0xSOLIDarnost/dao-bot/lib/rules"
 	voter "github.com/0xSOLIDarnost/dao-bot/lib/voter"
+
 	//passport "IKY-telegram-bot/artifacts/TGPassport"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -47,6 +49,9 @@ var mainKeyboard = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButton("Start a vote"),
 	),
 	tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("Start a vote for rules"),
+	),
+	tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("Help message")),
 )
 
@@ -65,11 +70,13 @@ type user struct {
 	DialogStatus int64
 	SetupStatus  int64
 	Repo         string
+	RepoToken    string
 	Dao          string
 	VotingType   uint8
 	VTC          string
 	PollTopic    string
 	PollDuration int64
+	VoteType     int64
 }
 
 var pollToChat = make(map[string]int64)
@@ -214,7 +221,7 @@ func main() {
 		if update.Message != nil {
 			if _, ok := userDatabase[update.Message.Chat.ID]; !ok {
 
-				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", 0, "0", "0", 0}
+				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", "0", 0, "0", "0", 0, 0}
 
 				isRegistered := checkDao(auth, UnionCaller, update.Message.Chat.ID)
 				if isRegistered {
@@ -249,7 +256,7 @@ func main() {
 				case 1:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 						updateDb.Repo = update.Message.Text
-						updateDb.SetupStatus = 2
+						updateDb.SetupStatus = 5
 						userDatabase[update.Message.Chat.ID] = updateDb
 						chatvar := userDatabase[update.Message.Chat.ID].Chat
 						uservar := userDatabase[update.Message.Chat.ID].Usertype
@@ -266,10 +273,19 @@ func main() {
 							delete(userDatabase, update.Message.Chat.ID)
 						}
 						if isUserRegistered && isAdmin {
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, tell me your Multisig address!")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, send me your Repo access token!\nWe need it to edit the rules based on polls.")
 							bot.Send(msg)
 						}
 					}
+				case 5:
+
+					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+						updateDb.RepoToken = update.Message.Text
+						updateDb.SetupStatus = 2
+						userDatabase[update.Message.Chat.ID] = updateDb
+					}
+					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Alright! Now tell me the address of your Multisignature wallet!")
+					bot.Send(msg)
 
 				case 2:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
@@ -403,12 +419,26 @@ func main() {
 					case "Start a vote":
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 							updateDb.DialogStatus = 2
-
+							updateDb.VoteType = 0
 							updateDb.Tgid = update.Message.From.ID
 							updateDb.PollDuration = time.Now().Unix() + 60
 
 							userDatabase[update.Message.Chat.ID] = updateDb
 							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, let's start a vote! Enter the topic.")
+							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(false)
+							bot.Send(msg)
+
+						}
+					case "Start a vote for rules":
+						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
+							updateDb.DialogStatus = 2
+							updateDb.VoteType = 1
+
+							updateDb.Tgid = update.Message.From.ID
+							updateDb.PollDuration = time.Now().Unix() + 60
+
+							userDatabase[update.Message.Chat.ID] = updateDb
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, let's start a vote for rules! Enter the suggested rule.")
 							msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(false)
 							bot.Send(msg)
 
@@ -449,6 +479,7 @@ func main() {
 
 								updateDb.PollDuration = duration
 								updateDb.DialogStatus = 4
+
 								userDatabase[update.Message.Chat.ID] = updateDb
 
 								timeOfEnd := time.Now().Unix() + (duration * 60) //TODO: change to 3600!!!
@@ -459,6 +490,13 @@ func main() {
 								bot.Send(msgWithTime)
 
 								poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, userDatabase[update.Message.Chat.ID].PollTopic)
+
+								if userDatabase[update.Message.Chat.ID].VoteType == 1 {
+									msgWithRule := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, update.Message.From.UserName+" wants to add the following rule: "+userDatabase[update.Message.Chat.ID].PollTopic)
+
+									bot.Send(msgWithRule)
+									poll = voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, "Do we accept to add this rule?")
+								}
 
 								sentMessage, _ := bot.Send(poll)
 
@@ -504,11 +542,21 @@ func main() {
 
 			if finished {
 				if updateDb, ok := userDatabase[ChatID]; ok {
+
 					updateDb.DialogStatus = 1
 					text := "Was declined!"
 					if accepted {
 						text = "Was accepted!"
+						if updateDb.VoteType == 1 {
+							err := rules.AddRule(ctx, updateDb.Repo, updateDb.RepoToken, updateDb.PollTopic)
+							if err == nil {
+								text = "Pull request with rule was created! Please, merge it at " + updateDb.Repo
+							} else {
+								text = "Error occured in opening the pull request :("
+							}
+						}
 					}
+
 					userDatabase[ChatID] = updateDb
 					msg := tgbotapi.NewMessage(userDatabase[ChatID].ChatID, text)
 					msg.ReplyMarkup = mainKeyboard

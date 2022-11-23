@@ -57,7 +57,7 @@ func GetRules(ctx context.Context, repo_url string, access_token string) (string
 }
 
 // addRule Creates PR in repository which adding {content} to README file
-func addRule(ctx context.Context, repo_url string, access_token string, content string) error {
+func AddRule(ctx context.Context, repo_url string, access_token string, content string) error {
 	owner, repo, err := github_utils.ParseGithubRepoURL(repo_url)
 	if err != nil {
 		return err
