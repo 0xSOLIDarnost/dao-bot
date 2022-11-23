@@ -515,7 +515,7 @@ func main() {
 					bot.Send(msg)
 
 				}
-			} else if time.Now().Unix() > (beginning + duration + 120) {
+			} else if time.Now().Unix() > (beginning + duration + 3600) {
 				if updateDb, ok := userDatabase[ChatID]; ok {
 					updateDb.DialogStatus = 1
 					userDatabase[ChatID] = updateDb
