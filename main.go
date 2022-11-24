@@ -362,42 +362,15 @@ func main() {
 						subscription, err := SubscribeForApplicationsIndexed(session, ch_index, tgid_array) // this is subscription to INDEXED event. This mean we can pass what exactly value of argument we want to see
 
 						if err != nil {
-							log.Fatal(err)
+							log.Println(err)
 						}
-					EventLoop:
-						for {
-							select {
-							case <-ctx.Done():
-								{
-									subscription.Unsubscribe()
-									break EventLoop
-								}
-							case eventResult := <-ch_index:
-								{
-									fmt.Println("DAO tg_id:", eventResult.ChatId)
-									fmt.Println("DAO wallet address:", eventResult.MultyWalletAddress)
-									applyer_tg_string := fmt.Sprint(eventResult.ChatId)
-									msg = tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Your application for chat "+applyer_tg_string+" was received!")
-									msg.ReplyMarkup = mainKeyboard
-									bot.Send(msg)
-									ApproveDAO(auth, UnionSession, eventResult.MultyWalletAddress)
-									if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-										updateDb.SetupStatus = 0
-										updateDb.DialogStatus = 1
-										userDatabase[update.Message.Chat.ID] = updateDb
 
-										userToSave, _ := json.Marshal(userDatabase[update.Message.Chat.ID])
-										dbKey := []byte(strconv.FormatInt(update.Message.Chat.ID, 10))
+						go AsyncApprove(ctx, subscription, userDatabase[update.Message.Chat.ID].ChatID, auth, UnionSession, userDatabase)
 
-										tgdb.Put(dbKey, userToSave)
+						userToSave, _ := json.Marshal(userDatabase[update.Message.Chat.ID])
+						dbKey := []byte(strconv.FormatInt(update.Message.Chat.ID, 10))
 
-										subscription.Unsubscribe()
-										break EventLoop
-									}
-
-								}
-							}
-						}
+						tgdb.Put(dbKey, userToSave)
 					}
 				}
 			} else {
@@ -440,15 +413,17 @@ func main() {
 
 					case "Help message":
 						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, helptext)
+						msg.ReplyMarkup = mainKeyboard
 						bot.Send(msg)
 
 					case "Get rules":
 						rules, err := rules.GetRules(ctx, userDatabase[update.Message.Chat.ID].Repo, gitToken)
-						text := "Failed to get rules :( \n Are you sure you added bot as a collaborator in your repo?"
+						text := "Failed to get rules :( \nAre you sure you added this bot as a collaborator in your repo?"
 						if err == nil {
 							text = rules
 						}
 						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, text)
+						msg.ReplyMarkup = mainKeyboard
 						bot.Send(msg)
 					}
 
@@ -701,4 +676,36 @@ func handlePanic() {
 		fmt.Println("RECOVER", a)
 	}
 
+}
+
+func AsyncApprove(ctx context.Context, subscription event.Subscription, chatid int64, auth *bind.TransactOpts, UnionSession *union.Union, userDatabase map[int64]user) {
+EventLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			{
+				subscription.Unsubscribe()
+				break EventLoop
+			}
+		case eventResult := <-ch_index:
+			{
+				fmt.Println("DAO tg_id:", eventResult.ChatId)
+				fmt.Println("DAO wallet address:", eventResult.MultyWalletAddress)
+				applyer_tg_string := fmt.Sprint(eventResult.ChatId)
+				msg := tgbotapi.NewMessage(userDatabase[chatid].ChatID, "Your application for chat "+applyer_tg_string+" was received!")
+				msg.ReplyMarkup = mainKeyboard
+				bot.Send(msg)
+				ApproveDAO(auth, UnionSession, eventResult.MultyWalletAddress)
+				if updateDb, ok := userDatabase[chatid]; ok {
+					updateDb.SetupStatus = 0
+					updateDb.DialogStatus = 1
+					userDatabase[chatid] = updateDb
+
+					subscription.Unsubscribe()
+					break EventLoop
+				}
+
+			}
+		}
+	}
 }
