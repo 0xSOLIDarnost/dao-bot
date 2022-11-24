@@ -46,7 +46,7 @@ type GithubClient struct {
 }
 
 func NewGithubService(ctx context.Context, token string) (*GithubService, error) {
-	if token != "" {
+	if token == "" {
 		return nil, errors.New("provided github token is empty")
 	}
 

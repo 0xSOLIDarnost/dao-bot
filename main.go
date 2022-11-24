@@ -492,7 +492,7 @@ func main() {
 								poll := voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, userDatabase[update.Message.Chat.ID].PollTopic)
 
 								if userDatabase[update.Message.Chat.ID].VoteType == 1 {
-									msgWithRule := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, update.Message.From.UserName+" wants to add the following rule: "+userDatabase[update.Message.Chat.ID].PollTopic)
+									msgWithRule := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "@"+update.Message.From.UserName+" wants to add the following rule: "+userDatabase[update.Message.Chat.ID].PollTopic)
 
 									bot.Send(msgWithRule)
 									poll = voter.StartPoll(userDatabase[update.Message.Chat.ID].ChatID, userDatabase[update.Message.Chat.ID].PollDuration, "Do we accept to add this rule?")
@@ -553,6 +553,8 @@ func main() {
 								text = "Pull request with rule was created! Please, merge it at " + updateDb.Repo
 							} else {
 								text = "Error occured in opening the pull request :("
+								fmt.Println(updateDb.RepoToken)
+								fmt.Println(err)
 							}
 						}
 					}

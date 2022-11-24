@@ -107,7 +107,7 @@ func AddRule(ctx context.Context, repo_url string, access_token string, content 
 	// Update README file with new rule and commit
 	commitName := "Add rule"
 	updatedContent := readmeContent + "\n" + content
-	_, _, err = service.NextClient().HTTP.Repositories.UpdateFile(ctx, owner, repo, "/README.md", &github.RepositoryContentFileOptions{
+	_, _, err = service.NextClient().HTTP.Repositories.UpdateFile(ctx, owner, repo, "README.md", &github.RepositoryContentFileOptions{
 		Message: &commitName,
 		Content: []byte(updatedContent),
 		SHA:     readme.SHA,
