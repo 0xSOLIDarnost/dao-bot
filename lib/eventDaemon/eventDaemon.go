@@ -16,6 +16,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
@@ -455,5 +456,15 @@ func IsTokenTransfer(session *multisig.MultiSigWalletSession, data []byte) (bool
 	} else {
 		return transfer,err
 	}
+}
+
+func ConfirmMultisigTx(session *multisig.MultiSigWalletSession, txid *big.Int) (tx *types.Transaction, err error) {
+	confirm, err := session.Contract.ConfirmTransaction(&session.TransactOpts,txid)
+	if err != nil {
+		return nil, err
+	} else {
+		return confirm,nil
+	}
+
 }
 
