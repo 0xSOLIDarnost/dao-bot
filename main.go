@@ -70,7 +70,6 @@ type user struct {
 	DialogStatus int64
 	SetupStatus  int64
 	Repo         string
-	RepoToken    string
 	Dao          string
 	VotingType   uint8
 	VTC          string
@@ -111,6 +110,7 @@ func main() {
 	pk := os.Getenv("PK") // load private key from env
 	gateway := os.Getenv("GATEWAY_GOERLI_WS")
 
+	gitToken := os.Getenv("GITHUB_TOKEN")
 	accAddress := os.Getenv("ACCOUNT_ADDRESS")
 	contractAddress := os.Getenv("UNION_ADDRESS")
 	passportAddress := os.Getenv("PASSPORT_ADDRESS")
@@ -221,7 +221,7 @@ func main() {
 		if update.Message != nil {
 			if _, ok := userDatabase[update.Message.Chat.ID]; !ok {
 
-				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", "0", 0, "0", "0", 0, 0}
+				userDatabase[update.Message.Chat.ID] = user{update.Message.Chat, update.Message.From, update.Message.From.ID, update.Message.Chat.ID, update.Message.Chat.Title, 0, 0, "0", "0", 0, "0", "0", 0, 0}
 
 				isRegistered := checkDao(auth, UnionCaller, update.Message.Chat.ID)
 				if isRegistered {
@@ -256,7 +256,7 @@ func main() {
 				case 1:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
 						updateDb.Repo = update.Message.Text
-						updateDb.SetupStatus = 5
+						updateDb.SetupStatus = 2
 						userDatabase[update.Message.Chat.ID] = updateDb
 						chatvar := userDatabase[update.Message.Chat.ID].Chat
 						uservar := userDatabase[update.Message.Chat.ID].Usertype
@@ -273,19 +273,12 @@ func main() {
 							delete(userDatabase, update.Message.Chat.ID)
 						}
 						if isUserRegistered && isAdmin {
-							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, send me your Repo access token!\nWe need it to edit the rules based on polls.")
+							msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Okay, now please add solidaobot as a collaborator here: "+userDatabase[update.Message.Chat.ID].Repo+"/settings/access"+"\n"+"We need it to edit the rules based on polls.")
 							bot.Send(msg)
+							msg1 := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "After you're done, please send me your Multisignature wallet address.")
+							bot.Send(msg1)
 						}
 					}
-				case 5:
-
-					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
-						updateDb.RepoToken = update.Message.Text
-						updateDb.SetupStatus = 2
-						userDatabase[update.Message.Chat.ID] = updateDb
-					}
-					msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, "Alright! Now tell me the address of your Multisignature wallet!")
-					bot.Send(msg)
 
 				case 2:
 					if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
@@ -548,11 +541,12 @@ func main() {
 					if accepted {
 						text = "Was accepted!"
 						if updateDb.VoteType == 1 {
-							err := rules.AddRule(ctx, updateDb.Repo, updateDb.RepoToken, updateDb.PollTopic)
+							err := rules.AddRule(ctx, updateDb.Repo, gitToken, updateDb.PollTopic)
 							if err == nil {
-								text = "Pull request with rule was created! Please, merge it at " + updateDb.Repo
+								text = "Pull request with rule was created! Please, merge it at " + updateDb.Repo + "/pulls"
 							} else {
-								text = "Error occured in pull request opening :("
+								text = "Error occured in pull request opening :(\nDid you add this bot as a colaborator in your repo?"
+								fmt.Println(err)
 							}
 						}
 					}
