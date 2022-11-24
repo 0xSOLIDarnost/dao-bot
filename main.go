@@ -20,6 +20,7 @@ import (
 
 	//union "github.com/daseinsucks/MultisigBot/artifacts"
 
+	daemon "github.com/0xSOLIDarnost/dao-bot/lib/eventDaemon"
 	rules "github.com/0xSOLIDarnost/dao-bot/lib/rules"
 	voter "github.com/0xSOLIDarnost/dao-bot/lib/voter"
 
@@ -57,6 +58,17 @@ var mainKeyboard = tgbotapi.NewReplyKeyboard(
 )
 
 var nullAddress common.Address = common.HexToAddress("0x0000000000000000000000000000000000000000")
+
+type SubmissionMsg struct {
+	Chat_id         int64
+	SubmissionEvent *multisig.MultiSigWalletSubmission
+}
+
+// Coin deposit
+type DepositMsg struct {
+	Chat_id      int64
+	DepositEvent *multisig.MultiSigWalletDeposit
+}
 
 //to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
 var tgApiKey, err = os.ReadFile(".secret")
@@ -102,6 +114,9 @@ var ch_index = make(chan *union.UnionApplicationForJoinIndexed)
 
 //main database for dialogs, key (int64) is telegram chat id
 var userDatabase = make(map[int64]user) // consider to change in persistend data storage?
+
+var submission_msg = make(chan *daemon.SubmissionMsg)
+var deposit_msg = make(chan *daemon.DepositMsg)
 
 func main() {
 
@@ -371,6 +386,8 @@ func main() {
 						dbKey := []byte(strconv.FormatInt(update.Message.Chat.ID, 10))
 
 						tgdb.Put(dbKey, userToSave)
+
+						//goroutine starts here
 					}
 				}
 			} else {
@@ -382,6 +399,10 @@ func main() {
 				case 1: //main standby status, awaiting for commands (they should be entered in this switch statement)
 
 					switch update.Message.Text {
+
+					case "Subscribe":
+						go daemon.Start(submission_msg, deposit_msg)
+						//go SendEvent(submission_msg, deposit_msg)
 
 					case "Start a vote":
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
@@ -708,4 +729,21 @@ EventLoop:
 			}
 		}
 	}
+}
+
+func SendEvent(masterChannelSub chan *daemon.SubmissionMsg, masterChannelDep chan *daemon.DepositMsg) {
+
+	SubmissionMsg := <-masterChannelSub
+	ChatSubID := SubmissionMsg.Chat_id
+	txSubId := SubmissionMsg.SubmissionEvent.TransactionId.String()
+	SubmissionText := "Submission event recieved, transaction id: " + txSubId
+	msgSub := tgbotapi.NewMessage(ChatSubID, SubmissionText)
+	bot.Send(msgSub)
+
+	DepositMsg := <-masterChannelDep
+	ChatDepID := DepositMsg.Chat_id
+	txDepId := DepositMsg.DepositEvent.Value.String()
+	DepositText := "Deposit event recieved, amount is: " + txDepId
+	msgDep := tgbotapi.NewMessage(ChatDepID, DepositText)
+	bot.Send(msgDep)
 }
