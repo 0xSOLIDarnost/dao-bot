@@ -552,9 +552,7 @@ func main() {
 							if err == nil {
 								text = "Pull request with rule was created! Please, merge it at " + updateDb.Repo
 							} else {
-								text = "Error occured in opening the pull request :("
-								fmt.Println(updateDb.RepoToken)
-								fmt.Println(err)
+								text = "Error occured in pull request opening :("
 							}
 						}
 					}
