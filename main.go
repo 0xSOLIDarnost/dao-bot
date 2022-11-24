@@ -52,7 +52,8 @@ var mainKeyboard = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButton("Start a vote for rules"),
 	),
 	tgbotapi.NewKeyboardButtonRow(
-		tgbotapi.NewKeyboardButton("Help message")),
+		tgbotapi.NewKeyboardButton("Help message"),
+		tgbotapi.NewKeyboardButton("Get rules")),
 )
 
 var nullAddress common.Address = common.HexToAddress("0x0000000000000000000000000000000000000000")
@@ -439,6 +440,15 @@ func main() {
 
 					case "Help message":
 						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, helptext)
+						bot.Send(msg)
+
+					case "Get rules":
+						rules, err := rules.GetRules(ctx, userDatabase[update.Message.Chat.ID].Repo, gitToken)
+						text := "Failed to get rules :( \n Are you sure you added bot as a collaborator in your repo?"
+						if err == nil {
+							text = rules
+						}
+						msg := tgbotapi.NewMessage(userDatabase[update.Message.Chat.ID].ChatID, text)
 						bot.Send(msg)
 					}
 
