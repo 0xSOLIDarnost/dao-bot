@@ -118,6 +118,9 @@ var userDatabase = make(map[int64]user) // consider to change in persistend data
 var submission_msg = make(chan *daemon.SubmissionMsg)
 var deposit_msg = make(chan *daemon.DepositMsg)
 
+var submission_msg_to_func = make(chan *daemon.SubmissionMsg)
+var deposit_msg_to_func = make(chan *daemon.DepositMsg)
+
 func main() {
 
 	tgdb, _ := pogreb.Open("telegramdb", nil)
@@ -223,6 +226,10 @@ func main() {
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
+
+	go daemon.Start(submission_msg, deposit_msg)
+	go MastermindConnection(submission_msg, deposit_msg, submission_msg_to_func, deposit_msg_to_func)
+	go SendEvent(submission_msg_to_func, deposit_msg_to_func)
 
 	helptext := "Hi! This bot is designed to operate DAO. If you're not registered, we'll walk you through it.\nOtherwise, use the provided keyboard to operate it"
 
@@ -399,10 +406,6 @@ func main() {
 				case 1: //main standby status, awaiting for commands (they should be entered in this switch statement)
 
 					switch update.Message.Text {
-
-					case "Subscribe":
-						go daemon.Start(submission_msg, deposit_msg)
-						//go SendEvent(submission_msg, deposit_msg)
 
 					case "Start a vote":
 						if updateDb, ok := userDatabase[update.Message.Chat.ID]; ok {
@@ -732,18 +735,35 @@ EventLoop:
 }
 
 func SendEvent(masterChannelSub chan *daemon.SubmissionMsg, masterChannelDep chan *daemon.DepositMsg) {
+	for {
+		select {
+		case submission_event := <-masterChannelSub:
+			SubmissionMsg := submission_event
+			ChatSubID := SubmissionMsg.Chat_id
+			txSubId := SubmissionMsg.SubmissionEvent.TransactionId.String()
+			SubmissionText := "Submission event received, transaction id: " + txSubId
+			msgSub := tgbotapi.NewMessage(ChatSubID, SubmissionText)
+			bot.Send(msgSub)
 
-	SubmissionMsg := <-masterChannelSub
-	ChatSubID := SubmissionMsg.Chat_id
-	txSubId := SubmissionMsg.SubmissionEvent.TransactionId.String()
-	SubmissionText := "Submission event recieved, transaction id: " + txSubId
-	msgSub := tgbotapi.NewMessage(ChatSubID, SubmissionText)
-	bot.Send(msgSub)
+		case deposit_event := <-masterChannelDep:
+			DepositMsg := deposit_event
+			ChatDepID := DepositMsg.Chat_id
+			txDepId := DepositMsg.DepositEvent.Value.String()
+			DepositText := "Deposit event received, amount is: " + txDepId + "wei"
+			msgDep := tgbotapi.NewMessage(ChatDepID, DepositText)
+			bot.Send(msgDep)
 
-	DepositMsg := <-masterChannelDep
-	ChatDepID := DepositMsg.Chat_id
-	txDepId := DepositMsg.DepositEvent.Value.String()
-	DepositText := "Deposit event recieved, amount is: " + txDepId
-	msgDep := tgbotapi.NewMessage(ChatDepID, DepositText)
-	bot.Send(msgDep)
+		}
+	}
+}
+
+func MastermindConnection(subIN chan *daemon.SubmissionMsg, depIN chan *daemon.DepositMsg, subOUT chan *daemon.SubmissionMsg, depOUT chan *daemon.DepositMsg) {
+	for {
+		select {
+		case subvalve := <-subIN:
+			subOUT <- subvalve
+		case depvalve := <-depIN:
+			depOUT <- depvalve
+		}
+	}
 }

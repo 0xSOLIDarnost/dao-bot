@@ -270,7 +270,7 @@ EventLoop:
 				//fmt.Println("Somebody want to submit new tx, his address:")
 				fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
 				fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
-				var msg *SubmissionMsg
+				var msg *SubmissionMsg = new(SubmissionMsg)
 				msg.Chat_id = Chat_id
 				msg.SubmissionEvent = eventResult
 				listenchan <- msg
@@ -323,7 +323,7 @@ EventLoop:
 				//fmt.Println("Somebody want to submit new tx, his address:")
 				fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
 				fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
-				var msg *DepositMsg
+				var msg *DepositMsg = new(DepositMsg)
 				msg.Chat_id = Chat_id
 				msg.DepositEvent = eventResult
 				listenchan <- msg
