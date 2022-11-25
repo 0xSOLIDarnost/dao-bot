@@ -26,38 +26,34 @@ import (
 //var ch = make(chan *passport.PassportPassportApplied)
 //var ch_index = make(chan *passport.PassportPassportAppliedIndexed)
 
-
-
-
 var GlobalClient *ethclient.Client
 var GlobalAuth *bind.TransactOpts
 
-var chat_ids = make([]int64,0) 
+var chat_ids = make([]int64, 0)
 
 var chat_wallets = make(map[int64]common.Address)
 
 // any submitted tx
 type SubmissionMsg struct {
-	chat_id int64
+	Chat_id         int64
 	SubmissionEvent *multisig.MultiSigWalletSubmission
 }
 
 // Coin deposit
 type DepositMsg struct {
-	chat_id int64
+	Chat_id      int64
 	DepositEvent *multisig.MultiSigWalletDeposit
 }
 
 type NewOwnerMsg struct {
-	chat_id int64
+	Chat_id       int64
 	NewOwnerEvent *multisig.MultiSigWalletOwnerAddition
 }
 
 type RemoveOwnerMsg struct {
-	chat_id int64
+	Chat_id          int64
 	RemoveOwnerEvent *multisig.MultiSigWalletOwnerRemoval
 }
-
 
 // var globalChan chan *SubmissionMsg
 
@@ -76,10 +72,7 @@ func main() {
 }
 */
 
-
-
 func Start(masterChannelSub chan *SubmissionMsg, masterChannelDep chan *DepositMsg) {
-
 
 	loadEnv()
 	ctx := context.Background()
@@ -110,13 +103,11 @@ func Start(masterChannelSub chan *SubmissionMsg, masterChannelDep chan *DepositM
 	balance, _ := client.BalanceAt(ctx, accountAddress, nil) //our balance
 	fmt.Printf("Balance of the validator bot: %d\n", balance)
 
-
 	// setting up union contract
 	UnionCenter, err := union.NewUnion(common.HexToAddress(myenv["UNION_ADDRESS"]), client)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Union contract: %v", err)
 	}
-
 
 	//Wrap union session
 	sessionUnion := &union.UnionSession{
@@ -137,122 +128,109 @@ func Start(masterChannelSub chan *SubmissionMsg, masterChannelDep chan *DepositM
 
 	log.Printf("session with union center initialized")
 
-
-	// Get current counter (how much chat_id is registred and make them in array)
+	// Get current counter (how much Chat_id is registred and make them in array)
 	counter, err := GetUnionsCounter(sessionUnion)
 	if err != nil {
 		log.Printf(err.Error())
 	}
 	log.Println(counter)
-	
+
 	counter_int := counter.Int64()
 	log.Println(counter_int)
 
 	i := int64(0)
-	for i = 0;  i < counter_int; i++ {
+	for i = 0; i < counter_int; i++ {
 
 		// Get chatID
-		chat_id, err := GetChatID(sessionUnion,big.NewInt(i))
+		Chat_id, err := GetChatID(sessionUnion, big.NewInt(i))
 		if err != nil {
 			log.Printf(err.Error())
 		}
-		//chat_ids[i] = chat_id
-		chat_ids = append(chat_ids,chat_id)
-		fmt.Println("found new chat id: ",chat_ids[i])
+		//chat_ids[i] = Chat_id
+		chat_ids = append(chat_ids, Chat_id)
+		fmt.Println("found new chat id: ", chat_ids[i])
 	}
 
 	// we also subscribe to any new registred dao
 	var new_daos_ch = make(chan *union.UnionApprovedJoin)
-	subscriptionNewDaos,err := SubscribeForApprovedUnions(sessionUnion,new_daos_ch)
+	subscriptionNewDaos, err := SubscribeForApprovedUnions(sessionUnion, new_daos_ch)
 
-	
-	for _,id := range chat_ids {
+	for _, id := range chat_ids {
 		// get wallet addresses
-		chat_wallets[id], err = GetAddressDao(sessionUnion,id)
+		chat_wallets[id], err = GetAddressDao(sessionUnion, id)
 		if err != nil {
 			log.Printf(err.Error())
 		}
-		fmt.Printf("for chat_id: %d  ",id)
+		fmt.Printf("for Chat_id: %d  ", id)
 		fmt.Println("dao wallet address is: ", chat_wallets[id])
 	}
-	
+
 	//var submission_ch = make(chan *multisig.MultiSigWalletSubmission)
 	var submission_msg = make(chan *SubmissionMsg)
 	var deposit_msg = make(chan *DepositMsg)
 
-
-	
-	for chatID,address := range chat_wallets {
+	for chatID, address := range chat_wallets {
 		//go SubscribeForSubmittedTransactions()
-		go InitiateMultisigSession(ctx,address,submission_msg,chatID)
-		go ListenToDepositMultisig(ctx,address,deposit_msg,chatID)
-		fmt.Printf("for chat_id: %d  ",chatID)
+		go InitiateMultisigSession(ctx, address, submission_msg, chatID)
+		go ListenToDepositMultisig(ctx, address, deposit_msg, chatID)
+		fmt.Printf("for Chat_id: %d  ", chatID)
 		fmt.Println("subscribed for multisig address: ", address)
 	}
-	
 
-
-	EventLoop:
+EventLoop:
 	for {
 		select {
 		case <-ctx.Done():
 			{
-				subscriptionNewDaos.Unsubscribe();
-			break EventLoop
+				subscriptionNewDaos.Unsubscribe()
+				break EventLoop
 			}
-	case NewDao:= <-new_daos_ch:
-		{
-			fmt.Println("/n")
-			fmt.Println("found new chat id::", NewDao.ChatId)
-			fmt.Println("with associated wallet address:", NewDao.MultyWalletAddress)
-			go InitiateMultisigSession(ctx,NewDao.MultyWalletAddress,submission_msg,NewDao.ChatId.Int64())
+		case NewDao := <-new_daos_ch:
+			{
+				fmt.Println("/n")
+				fmt.Println("found new chat id::", NewDao.ChatId)
+				fmt.Println("with associated wallet address:", NewDao.MultyWalletAddress)
+				go InitiateMultisigSession(ctx, NewDao.MultyWalletAddress, submission_msg, NewDao.ChatId.Int64())
 
+			}
+		case NewSubmission := <-submission_msg:
+			{
+				fmt.Println("new submission has found in MAIN thread, channels work!")
+				fmt.Println("/n")
+				fmt.Println("transaction id:", NewSubmission.SubmissionEvent.TransactionId)
+				fmt.Println("chat id to sent msg:", NewSubmission.Chat_id)
+				fmt.Println("data:", NewSubmission.SubmissionEvent.Raw)
+				masterChannelSub <- NewSubmission
+			}
+		case NewDeposit := <-deposit_msg:
+			{
+				fmt.Println("new DEPOSIT has found in MAIN thread, channels work!")
+				fmt.Println("/n")
+				fmt.Println("donator:", NewDeposit.DepositEvent.Sender)
+				fmt.Println("chat id to sent msg:", NewDeposit.Chat_id)
+				fmt.Println("how much was deposit:", NewDeposit.DepositEvent.Value)
+				masterChannelDep <- NewDeposit
+			}
 		}
-	case NewSubmission := <-submission_msg:
-		{
-			fmt.Println("new submission has found in MAIN thread, channels work!")
-			fmt.Println("/n")
-			fmt.Println("transaction id:",NewSubmission.SubmissionEvent.TransactionId)
-			fmt.Println("chat id to sent msg:",NewSubmission.chat_id)
-			fmt.Println("data:",NewSubmission.SubmissionEvent.Raw)
-			masterChannelSub<- NewSubmission
-		}
-	case NewDeposit := <-deposit_msg:
-		{
-			fmt.Println("new DEPOSIT has found in MAIN thread, channels work!")
-			fmt.Println("/n")
-			fmt.Println("donator:",NewDeposit.DepositEvent.Sender)
-			fmt.Println("chat id to sent msg:",NewDeposit.chat_id)
-			fmt.Println("how much was deposit:",NewDeposit.DepositEvent.Value)
-			masterChannelDep<- NewDeposit
-		}
-		}
-		}
+	}
 
-
-
-//	log.Printf("Authorized on account %s", bot.Self.UserName)
+	//	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	/** TODO:
 	*	0. Make initialize (main) function
 	*	1. subscribe for Union event "Approved"
 	*	2. each time someone got approve -- InitiateMultisigSession(ctx.Background, Multisig_address)
-	*	3. each time we get some "Submit" event from Multisig we need to forward it to main module with tethered chat_id
+	*	3. each time we get some "Submit" event from Multisig we need to forward it to main module with tethered Chat_id
 	*
-	*/
-
-
-
+	 */
 
 } // end of main func
 
-
-
 // Initiate event listener session (go routine) for SUBMIT Events
-func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Address, listenchan chan *SubmissionMsg, chat_id int64)  {
+func InitiateMultisigSession(ctx context.Context, dao_wallet_address common.Address, listenchan chan *SubmissionMsg, Chat_id int64) {
 
-//	ctx := context.Background()
-	MultisigInstance,err := multisig.NewMultiSigWallet(dao_wallet_address,GlobalClient)
+	//	ctx := context.Background()
+	MultisigInstance, err := multisig.NewMultiSigWallet(dao_wallet_address, GlobalClient)
 	if err != nil {
 		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
@@ -275,86 +253,84 @@ func InitiateMultisigSession(ctx context.Context,dao_wallet_address common.Addre
 	}
 
 	var ch = make(chan *multisig.MultiSigWalletSubmission)
-	subscription,err := SubscribeForSubmittedTransactions(sessionMultisig,ch)
+	subscription, err := SubscribeForSubmittedTransactions(sessionMultisig, ch)
 
 	// Infinite loop for specific Multisig submission
-	EventLoop:
+EventLoop:
 	for {
 		select {
 		case <-ctx.Done():
 			{
-			subscription.Unsubscribe();
-			break EventLoop
-			}
-	case eventResult:= <-ch:
-		{
-			fmt.Println("/n")
-			//fmt.Println("Somebody want to submit new tx, his address:")
-			fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
-			fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
-			var msg *SubmissionMsg
-			msg.chat_id = chat_id
-			msg.SubmissionEvent = eventResult
-			listenchan <-msg
-		}
-		}
-		}
-}
-
-
-// Initiate event listener session (go routine) for DEPOSIT Events
-func ListenToDepositMultisig(ctx context.Context,dao_wallet_address common.Address, listenchan chan *DepositMsg, chat_id int64)  {
-
-	//	ctx := context.Background()
-		MultisigInstance,err := multisig.NewMultiSigWallet(dao_wallet_address,GlobalClient)
-		if err != nil {
-			log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
-		}
-	
-		//Wrap a session
-		sessionMultisig := &multisig.MultiSigWalletSession{
-			Contract: MultisigInstance,
-			CallOpts: bind.CallOpts{
-				Pending: true,
-				From:    GlobalAuth.From,
-				Context: context.Background(),
-			},
-			TransactOpts: bind.TransactOpts{
-				From:     GlobalAuth.From,
-				Signer:   GlobalAuth.Signer,
-				GasLimit: 0,   // 0 automatically estimates gas limit
-				GasPrice: nil, // nil automatically suggests gas price
-				Context:  context.Background(),
-			},
-		}
-	
-		var ch = make(chan *multisig.MultiSigWalletDeposit)
-		subscription,err := SubscribeToDepositCoins(sessionMultisig,ch)
-	
-		// Infinite loop for specific Multisig submission
-		EventLoop:
-		for {
-			select {
-			case <-ctx.Done():
-				{
-				subscription.Unsubscribe();
+				subscription.Unsubscribe()
 				break EventLoop
-				}
-		case eventResult:= <-ch:
+			}
+		case eventResult := <-ch:
 			{
 				fmt.Println("/n")
 				//fmt.Println("Somebody want to submit new tx, his address:")
 				fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
 				fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
-				var msg *DepositMsg
-				msg.chat_id = chat_id
-				msg.DepositEvent = eventResult
-				listenchan <-msg
+				var msg *SubmissionMsg = new(SubmissionMsg)
+				msg.Chat_id = Chat_id
+				msg.SubmissionEvent = eventResult
+				listenchan <- msg
 			}
-			}
-			}
+		}
+	}
+}
+
+// Initiate event listener session (go routine) for DEPOSIT Events
+func ListenToDepositMultisig(ctx context.Context, dao_wallet_address common.Address, listenchan chan *DepositMsg, Chat_id int64) {
+
+	//	ctx := context.Background()
+	MultisigInstance, err := multisig.NewMultiSigWallet(dao_wallet_address, GlobalClient)
+	if err != nil {
+		log.Fatalf("Failed to instantiate a Multisig_wallet contract: %v", err)
 	}
 
+	//Wrap a session
+	sessionMultisig := &multisig.MultiSigWalletSession{
+		Contract: MultisigInstance,
+		CallOpts: bind.CallOpts{
+			Pending: true,
+			From:    GlobalAuth.From,
+			Context: context.Background(),
+		},
+		TransactOpts: bind.TransactOpts{
+			From:     GlobalAuth.From,
+			Signer:   GlobalAuth.Signer,
+			GasLimit: 0,   // 0 automatically estimates gas limit
+			GasPrice: nil, // nil automatically suggests gas price
+			Context:  context.Background(),
+		},
+	}
+
+	var ch = make(chan *multisig.MultiSigWalletDeposit)
+	subscription, err := SubscribeToDepositCoins(sessionMultisig, ch)
+
+	// Infinite loop for specific Multisig submission
+EventLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			{
+				subscription.Unsubscribe()
+				break EventLoop
+			}
+		case eventResult := <-ch:
+			{
+				fmt.Println("/n")
+				//fmt.Println("Somebody want to submit new tx, his address:")
+				fmt.Println("Destination for outcoming tx:", eventResult.Raw.Address)
+				fmt.Println("Data for outcoming tx:", eventResult.Raw.Data)
+				var msg *DepositMsg = new(DepositMsg)
+				msg.Chat_id = Chat_id
+				msg.DepositEvent = eventResult
+				listenchan <- msg
+			}
+		}
+	}
+}
 
 // load enviroment variables from .env file
 func loadEnv() {
@@ -364,15 +340,14 @@ func loadEnv() {
 	}
 }
 
-
 func GetUnionsCounter(session *union.UnionSession) (*big.Int, error) {
 
 	// sessionUnion.Contract.
-	dao_counter,err :=session.GetDaoCount()
+	dao_counter, err := session.GetDaoCount()
 	if err != nil {
 		return nil, err
 	} else {
-		return dao_counter,err
+		return dao_counter, err
 	}
 }
 
@@ -387,16 +362,14 @@ func GetChatID(session *union.UnionSession, counter *big.Int) (int64, error) {
 	}
 }
 
-
-func GetAddressDao(session *union.UnionSession, chat_id int64) (common.Address, error) {
-	dao_address,err := session.GetDaoAddressbyChatId(chat_id)
+func GetAddressDao(session *union.UnionSession, Chat_id int64) (common.Address, error) {
+	dao_address, err := session.GetDaoAddressbyChatId(Chat_id)
 	if err != nil {
 		return common.BigToAddress(nil), err
 	} else {
 		return dao_address, err
 	}
 }
-
 
 // subscribing for ApprovedJoin events. This event represent that a new dao has been registred. We use watchers without fast-forwarding past events
 func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<- *union.UnionApprovedJoin) (event.Subscription, error) {
@@ -412,7 +385,7 @@ func SubscribeForApprovedUnions(session *union.UnionSession, listenChannel chan<
 }
 
 /*
-// go routine for forwarding new found 
+// go routine for forwarding new found
 func GetNewDaos(session *union.UnionSession) {
 
 	var new_daos = make(chan *union.UnionApprovedJoin)
@@ -424,7 +397,7 @@ func GetNewDaos(session *union.UnionSession) {
 // TODO: add Anonymouse event for each time of event in multisig (without indexed values)
 func SubscribeForSubmittedTransactions(session *multisig.MultiSigWalletSession, listenChannel chan<- *multisig.MultiSigWalletSubmission) (event.Subscription, error) {
 	subscription, err := session.Contract.WatchSubmission(&bind.WatchOpts{
-		Start: nil,
+		Start:   nil,
 		Context: nil,
 	}, listenChannel,
 	)
@@ -432,39 +405,38 @@ func SubscribeForSubmittedTransactions(session *multisig.MultiSigWalletSession, 
 		return nil, err
 	}
 	log.Println("subscribed to Multisig submission transactions")
-	return subscription,err
+	return subscription, err
 }
 
 func SubscribeToDepositCoins(session *multisig.MultiSigWalletSession, listenChannel chan<- *multisig.MultiSigWalletDeposit) (event.Subscription, error) {
 	subscription, err := session.Contract.WatchDeposit(&bind.WatchOpts{
-		Start: nil,
+		Start:   nil,
 		Context: nil,
-	},listenChannel,
+	}, listenChannel,
 	)
 	if err != nil {
 		return nil, err
 	}
 	log.Println("subscribed to Multisig DEPOSIT transactions")
-	return subscription,err
+	return subscription, err
 
 }
 
-func IsTokenTransfer(session *multisig.MultiSigWalletSession, data []byte) (bool,error) {
-	transfer, err := session.Contract.IsTransfer(&session.CallOpts,data)
+func IsTokenTransfer(session *multisig.MultiSigWalletSession, data []byte) (bool, error) {
+	transfer, err := session.Contract.IsTransfer(&session.CallOpts, data)
 	if err != nil {
 		return false, err
 	} else {
-		return transfer,err
+		return transfer, err
 	}
 }
 
 func ConfirmMultisigTx(session *multisig.MultiSigWalletSession, txid *big.Int) (tx *types.Transaction, err error) {
-	confirm, err := session.Contract.ConfirmTransaction(&session.TransactOpts,txid)
+	confirm, err := session.Contract.ConfirmTransaction(&session.TransactOpts, txid)
 	if err != nil {
 		return nil, err
 	} else {
-		return confirm,nil
+		return confirm, nil
 	}
 
 }
-

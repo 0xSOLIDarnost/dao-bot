@@ -20,6 +20,7 @@ import (
 
 	//union "github.com/daseinsucks/MultisigBot/artifacts"
 
+	daemon "github.com/0xSOLIDarnost/dao-bot/lib/eventDaemon"
 	rules "github.com/0xSOLIDarnost/dao-bot/lib/rules"
 	voter "github.com/0xSOLIDarnost/dao-bot/lib/voter"
 
@@ -57,6 +58,17 @@ var mainKeyboard = tgbotapi.NewReplyKeyboard(
 )
 
 var nullAddress common.Address = common.HexToAddress("0x0000000000000000000000000000000000000000")
+
+type SubmissionMsg struct {
+	Chat_id         int64
+	SubmissionEvent *multisig.MultiSigWalletSubmission
+}
+
+// Coin deposit
+type DepositMsg struct {
+	Chat_id      int64
+	DepositEvent *multisig.MultiSigWalletDeposit
+}
 
 //to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
 var tgApiKey, err = os.ReadFile(".secret")
@@ -102,6 +114,12 @@ var ch_index = make(chan *union.UnionApplicationForJoinIndexed)
 
 //main database for dialogs, key (int64) is telegram chat id
 var userDatabase = make(map[int64]user) // consider to change in persistend data storage?
+
+var submission_msg = make(chan *daemon.SubmissionMsg)
+var deposit_msg = make(chan *daemon.DepositMsg)
+
+var submission_msg_to_func = make(chan *daemon.SubmissionMsg)
+var deposit_msg_to_func = make(chan *daemon.DepositMsg)
 
 func main() {
 
@@ -208,6 +226,10 @@ func main() {
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
+
+	go daemon.Start(submission_msg, deposit_msg)
+	go MastermindConnection(submission_msg, deposit_msg, submission_msg_to_func, deposit_msg_to_func)
+	go SendEvent(submission_msg_to_func, deposit_msg_to_func)
 
 	helptext := "Hi! This bot is designed to operate DAO. If you're not registered, we'll walk you through it.\nOtherwise, use the provided keyboard to operate it"
 
@@ -371,6 +393,8 @@ func main() {
 						dbKey := []byte(strconv.FormatInt(update.Message.Chat.ID, 10))
 
 						tgdb.Put(dbKey, userToSave)
+
+						//goroutine starts here
 					}
 				}
 			} else {
@@ -706,6 +730,40 @@ EventLoop:
 				}
 
 			}
+		}
+	}
+}
+
+func SendEvent(masterChannelSub chan *daemon.SubmissionMsg, masterChannelDep chan *daemon.DepositMsg) {
+	for {
+		select {
+		case submission_event := <-masterChannelSub:
+			SubmissionMsg := submission_event
+			ChatSubID := SubmissionMsg.Chat_id
+			txSubId := SubmissionMsg.SubmissionEvent.TransactionId.String()
+			SubmissionText := "Submission event received, transaction id: " + txSubId
+			msgSub := tgbotapi.NewMessage(ChatSubID, SubmissionText)
+			bot.Send(msgSub)
+
+		case deposit_event := <-masterChannelDep:
+			DepositMsg := deposit_event
+			ChatDepID := DepositMsg.Chat_id
+			txDepId := DepositMsg.DepositEvent.Value.String()
+			DepositText := "Deposit event received, amount is: " + txDepId + "wei"
+			msgDep := tgbotapi.NewMessage(ChatDepID, DepositText)
+			bot.Send(msgDep)
+
+		}
+	}
+}
+
+func MastermindConnection(subIN chan *daemon.SubmissionMsg, depIN chan *daemon.DepositMsg, subOUT chan *daemon.SubmissionMsg, depOUT chan *daemon.DepositMsg) {
+	for {
+		select {
+		case subvalve := <-subIN:
+			subOUT <- subvalve
+		case depvalve := <-depIN:
+			depOUT <- depvalve
 		}
 	}
 }
