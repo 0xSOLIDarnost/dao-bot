@@ -237,9 +237,6 @@ func main() {
 	//TODO: add check Tgid == daoaddress(Tgid)
 	//whenever bot gets a new message, check for user id in the database happens, if it's a new user, the entry in the database is created.
 	for update := range updates {
-		if update.Message != nil {
-			fmt.Println("got message! Dialog status:", userDatabase[update.Message.Chat.ID].DialogStatus)
-		}
 
 		if update.Message != nil {
 			if _, ok := userDatabase[update.Message.Chat.ID]; !ok {
@@ -484,7 +481,7 @@ func main() {
 
 								userDatabase[update.Message.Chat.ID] = updateDb
 
-								timeOfEnd := time.Now().Unix() + (duration * 60) //TODO: change to 3600!!!
+								timeOfEnd := time.Now().Unix() + (duration * 3600)
 
 								timeUTCstring := time.Unix(timeOfEnd, 0).Format("15:04:05 02-01-2006")
 
@@ -522,7 +519,6 @@ func main() {
 		}
 		if (update.PollAnswer != nil && userDatabase[pollToChat[update.PollAnswer.PollID]].DialogStatus == 4) || (update.Message != nil && userDatabase[update.Message.Chat.ID].DialogStatus == 4) {
 
-			fmt.Println("got update! status is still 4")
 			var pollkey string
 			var ChatID int64
 
@@ -536,11 +532,9 @@ func main() {
 
 			tokenAddress := common.HexToAddress(userDatabase[ChatID].VTC)
 			tokenType := userDatabase[ChatID].VotingType
-			duration := userDatabase[ChatID].PollDuration * 60
+			duration := userDatabase[ChatID].PollDuration * 3600
 			beginning := pollToBeginning[pollkey]
 			accepted, finished := voter.VoteInProgress(duration, beginning, update, client, auth, tokenAddress, passportSession, tokenType, pollkey)
-			fmt.Println("Finished is:", finished)
-			fmt.Println("Accepted is:", accepted)
 
 			if finished {
 				if updateDb, ok := userDatabase[ChatID]; ok {
@@ -566,7 +560,7 @@ func main() {
 					bot.Send(msg)
 
 				}
-			} else if time.Now().Unix() > (beginning + duration + 3600) {
+			} else if time.Now().Unix() > (beginning + duration + 7200) {
 				if updateDb, ok := userDatabase[ChatID]; ok {
 					updateDb.DialogStatus = 1
 					userDatabase[ChatID] = updateDb

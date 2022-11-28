@@ -239,7 +239,6 @@ func VoteInProgress(duration int64, beginning int64, update tgbotapi.Update, cli
 
 			firstVoter := Voter{update.PollAnswer.User.ID, accepts}
 			poll[update.PollAnswer.PollID] = ActiveVote{y, n, []Voter{firstVoter}}
-			fmt.Println("Voting successful!")
 
 		} else {
 
@@ -280,7 +279,6 @@ func VoteInProgress(duration int64, beginning int64, update tgbotapi.Update, cli
 				updateArray := append(i, newVoter)
 				updateVoteStatus.voters = updateArray
 				poll[update.PollAnswer.PollID] = updateVoteStatus
-				fmt.Println("Voting successful!")
 			}
 
 			//if poll is closed, then next incoming update triggers this block, which returns the result
@@ -289,7 +287,6 @@ func VoteInProgress(duration int64, beginning int64, update tgbotapi.Update, cli
 
 	} else if update.Message != nil && time.Now().Unix() >= beginning+duration {
 
-		fmt.Println("Calculating happens!")
 		NoPower := new(big.Int)
 		YesPower := new(big.Int)
 		existingVoters := poll[pollId].voters
