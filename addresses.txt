@@ -1,68 +1,10 @@
-
-
-
-18.10.2022
-Goerli:
-TGPassport deployed to: 0x4C663B6968ed01B61f8AD6FBc2940948b0e47eF2
-Union deployed to: 0x81e7934CfcB099086637Fc21814e13c11cf54212
-Sample erc20 deployed to:  0x72e9B51a9882a4243d4b06c673faaC2216cC65AE
+Polygon:
 owner address: 0x16d97A46030C5D3D705bca45439e48529997D8b2
-passport fee: BigNumber { value: "1000" }
-applierd user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
-approved user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
-apllied dao address: 0x72e9B51a9882a4243d4b06c673faaC2216cC65AE
-approved dao address: 0x72e9B51a9882a4243d4b06c673faaC2216cC65AE
-
-
-Goerli v0.2.0:
-owner address: 0x16d97A46030C5D3D705bca45439e48529997D8b2
-TGPassport deployed to: 0xC14f07F30aBB60F0A143fB99fCc6c1f1a8070567
-Union deployed to: 0xc86aa41302E8ae8baAaB2Ce8647568AA17f10b7E
+TGPassport deployed to: 0x34BCAC93be263c8c1a56f651a8bE7FEEb69A56BA
+Union deployed to: 0xd7C27fDe9Fa580D5a8057ecC1E2809e7D801b675
 bytes32 moderator: 0xcea62fe6ecc79e221c545bf918f804693c542ead2549e37c2bb9baa66ee2e157
 Murs account have moderator role: true
-Sample ERC20 deployed to:  0xFbC45497848cc7438c528015271d73B9d8712385
-test dao address: 0x18f060e4E6A7ff6f432d45629085AeF5E6Cc5081
-passport fee: BigNumber { value: "1000" }
+Bot account have moderator role: true
+passport fee: BigNumber { value: "2000000000000000" }
 applierd user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
 approved user wallet : 0x16d97A46030C5D3D705bca45439e48529997D8b2
-apllied dao address: 0x18f060e4E6A7ff6f432d45629085AeF5E6Cc5081
-approved dao address: 0x18f060e4E6A7ff6f432d45629085AeF5E6Cc5081
-
-
-Second test data in Rinkeby:
-tgid : 1234
-chatid: 123456
-chat_name : "test_dao_link2"
-Multisig deployed:
-0xB01eaEd662E527bb76FcF5854ce7E4C2aE9e6394
-
-Admin rinkeby address: 0x16d97A46030C5D3D705bca45439e48529997D8b2
-
-
-
-Local Hardhat:
-TGPassport deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-Union deployed to: 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
-
-
-
-
-
-To make deploy to local node run `npx hardhat node` in one terminal and run `npx hardhat run --network localhost scripts/deploy.js` in other terminal window
-
-
-//deprecated
-Rinkeby:
-TGPassport deployed to: 0x44df8833c2D7d58f2F84Ba994BA46aA8f552A78e
-Union deployed to: 0xC3DD310b621c12D750A5F8f6fD00039f557968dF
-Sample erc20 deployed to:  0x8c33445FB9ad92d4D9E8108517458e82c444fb18
-owner address: 0x16d97A46030C5D3D705bca45439e48529997D8b2
-
-Test data in Rinkeby:
-registred user tgid: 1234
-registred user_name: "test_username"
-registred dao_username: "test_dao_username"
-registred chat tg_id: 12345
-approved dao address: 0x8c33445FB9ad92d4D9E8108517458e82c444fb18   //WARN: it's a token contract not a dao, I've just used it for test address
-
-

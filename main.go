@@ -70,7 +70,7 @@ type DepositMsg struct {
 	DepositEvent *multisig.MultiSigWalletDeposit
 }
 
-//to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
+// to operate the bot, put a text file containing key for your bot acquired from telegram "botfather" to the same directory with this file
 var tgApiKey, err = os.ReadFile(".secret")
 var bot, _ = tgbotapi.NewBotAPI(string(tgApiKey))
 
@@ -112,7 +112,7 @@ var ch_index = make(chan *union.UnionApplicationForJoinIndexed)
 
 //localhost:3000/dao?user_id=1337&chat_id=1337&address=23746624386&VotingType=1&votingtokencontract=3278465ASDW23&daoname=lol
 
-//main database for dialogs, key (int64) is telegram chat id
+// main database for dialogs, key (int64) is telegram chat id
 var userDatabase = make(map[int64]user) // consider to change in persistend data storage?
 
 var submission_msg = make(chan *daemon.SubmissionMsg)
@@ -127,7 +127,7 @@ func main() {
 	_ = godotenv.Load()
 	ctx := context.Background()
 	pk := os.Getenv("PK") // load private key from env
-	gateway := os.Getenv("GATEWAY_GOERLI_WS")
+	gateway := os.Getenv("GATEWAY_POLYGON_WS")
 
 	gitToken := os.Getenv("GITHUB_TOKEN")
 	accAddress := os.Getenv("ACCOUNT_ADDRESS")
@@ -154,7 +154,7 @@ func main() {
 	}
 
 	// Creating an auth transactor
-	auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(5))
+	auth, _ := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(137))
 	if err != nil {
 		log.Fatalf("could not connect to auth gateway: %v\n", err)
 	}
